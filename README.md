@@ -1,8 +1,22 @@
-# Intro Skipper (beta)
+# Jellyfin Intro Skip
 
-<div align="center">
-<img alt="Plugin Banner" src="https://raw.githubusercontent.com/ConfusedPolarBear/intro-skipper/master/images/logo.png" />
-</div>
+## This is a fork of [ConfusedPolarBear Intro Skipper](https://github.com/ConfusedPolarBear/intro-skipper)!
+
+Preparation as Jellyfin Core plugin
+- [x] Remove frontend playback injection
+- [x] Remove plugin settings section for playback
+- [ ] Update implementation to use Jellyfin Media Segment API
+- [ ] Move .edl file creation into another plugin
+
+Note: Intro prompt is shown 5 seconds before (plugin default), netflex 2? seconds after. Probably use 3 seconds before as guideline? \
+Note: Intro prompt hide is 10 seconds after start. netflix is 8s in total? Probably use 7 seconds after as guideline?
+Note: SkipFirstEpisode. Skip intro of frist episode. Gain? \
+Note: SecondsOfIntroToPlay. Generic offset to prevent skipped content? Should be added to a segment? Or frontend? EndPosition-2s \
+Note: Show a text when segment type "Skip" is executed as hint?
+
+List of additional fixes
+- [25% or 10 minutes](https://github.com/ConfusedPolarBear/intro-skipper/issues/139) updated to 30% and 15 Minutes
+- Pending: <https://github.com/ConfusedPolarBear/intro-skipper/issues/124>
 
 Analyzes the audio of television episodes to detect and skip over intros.
 
