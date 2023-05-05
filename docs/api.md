@@ -25,13 +25,9 @@ JSON schema:
     "EpisodeId": "{item id}",   // Unique GUID for this item as provided by Jellyfin.
     "Valid": true,              // Used internally to mark items that have intros. Should be ignored as it will always be true.
     "IntroStart": 100.5,        // Start time (in seconds) of the introduction.
-    "IntroEnd": 130.42,         // End time (in seconds) of the introduction.
-    "ShowSkipPromptAt": 95.5,   // Recommended time to display an on-screen intro skip prompt to the user.
-    "HideSkipPromptAt": 110.5   // Recommended time to hide the on-screen intro skip prompt.
+    "IntroEnd": 130.42          // End time (in seconds) of the introduction.
 }
 ```
-
-The `ShowSkipPromptAt` and `HideSkipPromptAt` properties are derived from the start time of the introduction and are customizable by the user from the plugin's settings.
 
 ### Example curl command
 
@@ -47,8 +43,6 @@ This returns the following JSON object:
   "EpisodeId": "12345678901234567890123456789012",
   "Valid": true,
   "IntroStart": 304,
-  "IntroEnd": 397.48,
-  "ShowSkipPromptAt": 299,
-  "HideSkipPromptAt": 314
+  "IntroEnd": 397.48
 }
 ```

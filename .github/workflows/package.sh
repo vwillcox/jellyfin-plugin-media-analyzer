@@ -8,11 +8,11 @@ fi
 
 # Use provided tag to derive archive filename and short tag
 version="$1"
-zip="intro-skipper-$version.zip"
+zip="jellyfin-plugin-mediaanalyzer-$version.zip"
 short="$(echo "$version" | sed "s/^v//")"
 
 # Get the assembly version
-CSPROJ="Jellyfin.Plugin.SegmentAnalyzer/Jellyfin.Plugin.SegmentAnalyzer.csproj"
+CSPROJ="Jellyfin.Plugin.MediaAnalyzer/Jellyfin.Plugin.MediaAnalyzer.csproj"
 assemblyVersion="$(grep -m1 -oE "([0-9]\.){3}[0-9]" "$CSPROJ")"
 
 # Get the date
@@ -36,8 +36,8 @@ mkdir package
 cd package || exit 1
 
 # Copy the freshly built plugin DLL to the packaging directory and archive
-cp "../Jellyfin.Plugin.SegmentAnalyzer/bin/Release/net6.0/Jellyfin.Plugin.SegmentAnalyzer.dll" ./ || exit 1
-zip "$zip" Jellyfin.Plugin.SegmentAnalyzer.dll || exit 1
+cp "../Jellyfin.Plugin.MediaAnalyzer/bin/Release/net7.0/Jellyfin.Plugin.MediaAnalyzer.dll" ./ || exit 1
+zip "$zip" Jellyfin.Plugin.MediaAnalyzer.dll || exit 1
 
 # Calculate the checksum of the archive
 checksum="$(md5sum "$zip" | cut -f 1 -d " ")"
@@ -46,9 +46,9 @@ checksum="$(md5sum "$zip" | cut -f 1 -d " ")"
 cat > manifest.json <<'EOF'
 {
     "version": "ASSEMBLY",
-    "changelog": "- See the full changelog at [GitHub](https://github.com/ConfusedPolarBear/intro-skipper/blob/master/CHANGELOG.md)\n",
-    "targetAbi": "10.8.4.0",
-    "sourceUrl": "https://github.com/ConfusedPolarBear/intro-skipper/releases/download/VERSION/ZIP",
+    "changelog": "- See the full changelog at [GitHub](https://github.com/Endrl/jellyfin-plugin-media-analyzer/blob/master/CHANGELOG.md)\n",
+    "targetAbi": "10.9.0.0",
+    "sourceUrl": "https://github.com/Endrl/jellyfin-plugin-media-analyzer/releases/download/VERSION/ZIP",
     "checksum": "CHECKSUM",
     "timestamp": "DATE"
 }

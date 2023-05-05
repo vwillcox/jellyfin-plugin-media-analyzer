@@ -15,11 +15,3 @@
    3. Test updating plugin
 4. Create release on GitHub with the following files:
    1. Archived plugin DLL
-   2. Link to the latest web interface
-
-## Release container
-
-1. Run publish container action
-2. Update `latest` tag
-    1. `docker tag ghcr.io/confusedpolarbear/jellyfin-intro-skipper:{COMMIT,latest}`
-    2. `docker push ghcr.io/confusedpolarbear/jellyfin-intro-skipper:latest`
