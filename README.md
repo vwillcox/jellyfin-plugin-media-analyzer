@@ -8,7 +8,7 @@ Preparation as Jellyfin Core plugin
 - [X] Update implementation to use Jellyfin Media Segment API
 - [x] Fix configPage.html updateTimestamps (update http endpoint required). Here just for intros?!
 - [x] Fix configPage.html delete segemts per type (deletes currently all)
-- [ ] Move .edl file creation into another plugin
+- [x] Move .edl file creation into another [plugin](<https://github.com/endrl/jellyfin-plugin-edl>)
 - [ ] Move the extended plugin page for segment edits to a dedicated plugin "Media Segment Editor" with additional meta support per plugin like "get chromaprints of plugin x"
 
 Note: Intro prompt is shown 5 seconds before (plugin default), netflex 2? seconds after. Probably use 3 seconds before as guideline? \
@@ -29,7 +29,6 @@ Analyzes the audio of television episodes to detect intros.
 ## Introduction requirements
 
 Show introductions will only be detected if they are:
-
 * Located within the first 30% of an episode, or the first 15 minutes, whichever is smaller
 * Between 15 seconds and 2 minutes long
 
@@ -38,8 +37,7 @@ Ending credits will only be detected if they are shorter than 4 minutes.
 All of these requirements can be customized as needed.
 
 ## Installation instructions
-
-1. Add this plugin repository to your server: `https://raw.githubusercontent.com/Endrl/jellyfin-plugin-media-analyzer/master/manifest.json`
-2. Install the Intro Skipper plugin from the General section
+1. Add plugin repository to your server: `https://raw.githubusercontent.com/endrl/jellyfin-plugin-repo/master/manifest.json`
+2. Install the Media Analyzer plugin from the General section
 3. Restart Jellyfin
 4. Go to Dashboard -> Scheduled Tasks -> Analyze Episodes and click the play button

@@ -37,11 +37,6 @@ public class BaseItemAnalyzerTask
         _logger = logger;
         _loggerFactory = loggerFactory;
         _libraryManager = libraryManager;
-
-        if (mode == AnalysisMode.Introduction)
-        {
-            EdlManager.Initialize(_logger);
-        }
     }
 
     /// <summary>
@@ -71,11 +66,6 @@ public class BaseItemAnalyzerTask
                 "No episodes to analyze. If you are limiting the list of libraries to analyze, check that all library names have been spelled correctly.");
         }
 
-        if (this._analysisMode == AnalysisMode.Introduction)
-        {
-            EdlManager.LogConfiguration();
-        }
-
         var totalProcessed = 0;
         var options = new ParallelOptions()
         {
@@ -84,8 +74,6 @@ public class BaseItemAnalyzerTask
 
         Parallel.ForEach(queue, options, (season) =>
         {
-            var writeEdl = false;
-
             // Since the first run of the task can run for multiple hours, ensure that none
             // of the current media items were deleted from Jellyfin since the task was started.
             var (episodes, unanalyzed) = queueManager.VerifyQueue(
@@ -118,8 +106,6 @@ public class BaseItemAnalyzerTask
 
                 var analyzed = AnalyzeItems(episodes, cancellationToken);
                 Interlocked.Add(ref totalProcessed, analyzed);
-
-                writeEdl = analyzed > 0 || Plugin.Instance!.Configuration.RegenerateEdlFiles;
             }
             catch (FingerprintException ex)
             {
@@ -130,25 +116,8 @@ public class BaseItemAnalyzerTask
                     ex);
             }
 
-            if (
-                writeEdl &&
-                Plugin.Instance!.Configuration.EdlAction != EdlAction.None &&
-                _analysisMode == AnalysisMode.Introduction)
-            {
-                EdlManager.UpdateEDLFiles(episodes);
-            }
-
             progress.Report((totalProcessed * 100) / totalQueued);
         });
-
-        if (
-            _analysisMode == AnalysisMode.Introduction &&
-            Plugin.Instance!.Configuration.RegenerateEdlFiles)
-        {
-            _logger.LogInformation("Turning EDL file regeneration flag off");
-            Plugin.Instance!.Configuration.RegenerateEdlFiles = false;
-            Plugin.Instance!.SaveConfiguration();
-        }
     }
 
     /// <summary>

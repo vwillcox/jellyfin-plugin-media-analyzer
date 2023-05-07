@@ -61,8 +61,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         FFmpegPath = serverConfiguration.GetEncodingOptions().EncoderAppPathDisplay;
 
-        var introsDirectory = Path.Join(applicationPaths.PluginConfigurationsPath, "intros");
-        FingerprintCachePath = Path.Join(introsDirectory, "cache");
+        FingerprintCachePath = Path.Join(applicationPaths.PluginConfigurationsPath, "chromaprints");
 
         // Create the base & cache directories (if needed).
         if (!Directory.Exists(FingerprintCachePath))
@@ -112,7 +111,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public string FFmpegPath { get; private set; }
 
     /// <inheritdoc />
-    public override string Name => "TV Show Intro Detector";
+    public override string Name => "Media Analyzer";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("80885677-DACB-461B-AC97-EE7E971288AA");

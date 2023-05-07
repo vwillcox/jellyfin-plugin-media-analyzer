@@ -38,7 +38,7 @@ public class DetectIntroductionsTask : IScheduledTask
     /// <summary>
     /// Gets the task category.
     /// </summary>
-    public string Category => "Media Segments";
+    public string Category => "Media Analyzer";
 
     /// <summary>
     /// Gets the task description.
@@ -48,7 +48,7 @@ public class DetectIntroductionsTask : IScheduledTask
     /// <summary>
     /// Gets the task key.
     /// </summary>
-    public string Key => "JFPIntroSkipDetectIntroductions";
+    public string Key => "JFPMediaAnalyzerDetectIntroductions";
 
     /// <summary>
     /// Analyze all episodes in the queue. Only one instance of this task should be run at a time.
