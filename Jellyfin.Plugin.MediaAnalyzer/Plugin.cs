@@ -24,7 +24,6 @@ namespace Jellyfin.Plugin.MediaAnalyzer;
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
-    private readonly object _introsLock = new();
     private IXmlSerializer _xmlSerializer;
     private ILibraryManager _libraryManager;
     private IItemRepository _itemRepository;
@@ -301,23 +300,20 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     internal void UpdateTimestamps(Dictionary<Guid, Intro> newTimestamps, AnalysisMode mode)
     {
-        lock (_introsLock)
+        foreach (var intro in newTimestamps)
         {
-            foreach (var intro in newTimestamps)
+            if (mode == AnalysisMode.Introduction)
             {
-                if (mode == AnalysisMode.Introduction)
-                {
-                    Plugin.Instance!.Intros[intro.Key] = intro.Value;
-                }
-                else if (mode == AnalysisMode.Credits)
-                {
-                    Plugin.Instance!.Credits[intro.Key] = intro.Value;
-                }
+                Plugin.Instance!.Intros[intro.Key] = intro.Value;
             }
-
-            var task = Plugin.Instance!.SaveSegments();
-            task.RunSynchronously();
+            else if (mode == AnalysisMode.Credits)
+            {
+                Plugin.Instance!.Credits[intro.Key] = intro.Value;
+            }
         }
+
+        var task = Task.Run(async () => { await Plugin.Instance!.SaveSegments().ConfigureAwait(false); });
+        task.Wait();
     }
 
     /// <summary>
@@ -341,7 +337,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override void OnUninstalling()
     {
         // Blocking thread, other solution?
-        var task = _mediaSegmentsManager.DeleteSegmentsAsync(creatorId: Id);
-        var result = task.Result;
+        var task = Task.Run(async () => { await _mediaSegmentsManager.DeleteSegmentsAsync(creatorId: Id).ConfigureAwait(false); });
+        task.Wait();
     }
 }
