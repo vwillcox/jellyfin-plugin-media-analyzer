@@ -27,17 +27,17 @@ public class BlackFrameAnalyzer : IMediaFileAnalyzer
     }
 
     /// <inheritdoc />
-    public ReadOnlyCollection<QueuedEpisode> AnalyzeMediaFiles(
-        ReadOnlyCollection<QueuedEpisode> analysisQueue,
+    public ReadOnlyCollection<QueuedMedia> AnalyzeMediaFiles(
+        ReadOnlyCollection<QueuedMedia> analysisQueue,
         AnalysisMode mode,
         CancellationToken cancellationToken)
     {
         if (mode != AnalysisMode.Credits)
         {
-            throw new NotImplementedException("mode must equal Credits");
+            throw new NotImplementedException("Blackframe analyzing is just suitable for Credits/Outro");
         }
 
-        var creditTimes = new Dictionary<Guid, Intro>();
+        var creditTimes = new Dictionary<Guid, Segment>();
 
         foreach (var episode in analysisQueue)
         {
@@ -56,13 +56,21 @@ public class BlackFrameAnalyzer : IMediaFileAnalyzer
                 continue;
             }
 
-            creditTimes[episode.EpisodeId] = intro;
+            creditTimes[episode.ItemId] = intro;
         }
 
-        Plugin.Instance!.UpdateTimestamps(creditTimes, mode);
+        if (creditTimes.Count != 0)
+        {
+            _logger.LogDebug("Save {Count} segment/s", creditTimes.Count);
+            Plugin.Instance!.UpdateTimestamps(creditTimes, mode);
+        }
+        else
+        {
+            _logger.LogDebug("No segments to save");
+        }
 
         return analysisQueue
-            .Where(x => !creditTimes.ContainsKey(x.EpisodeId))
+            .Where(x => !creditTimes.ContainsKey(x.ItemId))
             .ToList()
             .AsReadOnly();
     }
@@ -74,7 +82,7 @@ public class BlackFrameAnalyzer : IMediaFileAnalyzer
     /// <param name="mode">Analysis mode.</param>
     /// <param name="minimum">Percentage of the frame that must be black.</param>
     /// <returns>Credits timestamp.</returns>
-    public Intro? AnalyzeMediaFile(QueuedEpisode episode, AnalysisMode mode, int minimum)
+    public Segment? AnalyzeMediaFile(QueuedMedia episode, AnalysisMode mode, int minimum)
     {
         var config = Plugin.Instance?.Configuration ?? new Configuration.PluginConfiguration();
 
@@ -123,7 +131,7 @@ public class BlackFrameAnalyzer : IMediaFileAnalyzer
 
         if (firstFrameTime > 0)
         {
-            return new(episode.EpisodeId, new TimeRange(firstFrameTime, episode.Duration));
+            return new(episode.ItemId, episode.IsEpisode, new TimeRange(firstFrameTime, episode.Duration));
         }
 
         return null;

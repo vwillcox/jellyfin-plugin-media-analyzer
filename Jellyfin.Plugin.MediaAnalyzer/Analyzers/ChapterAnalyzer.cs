@@ -27,12 +27,12 @@ public class ChapterAnalyzer : IMediaFileAnalyzer
     }
 
     /// <inheritdoc />
-    public ReadOnlyCollection<QueuedEpisode> AnalyzeMediaFiles(
-        ReadOnlyCollection<QueuedEpisode> analysisQueue,
+    public ReadOnlyCollection<QueuedMedia> AnalyzeMediaFiles(
+        ReadOnlyCollection<QueuedMedia> analysisQueue,
         AnalysisMode mode,
         CancellationToken cancellationToken)
     {
-        var skippableRanges = new Dictionary<Guid, Intro>();
+        var skippableRanges = new Dictionary<Guid, Segment>();
 
         var expression = mode == AnalysisMode.Introduction ?
             Plugin.Instance!.Configuration.ChapterAnalyzerIntroductionPattern :
@@ -52,7 +52,7 @@ public class ChapterAnalyzer : IMediaFileAnalyzer
 
             var skipRange = FindMatchingChapter(
                 episode,
-                new(Plugin.Instance!.GetChapters(episode.EpisodeId)),
+                new(Plugin.Instance!.GetChapters(episode.ItemId)),
                 expression,
                 mode);
 
@@ -61,13 +61,21 @@ public class ChapterAnalyzer : IMediaFileAnalyzer
                 continue;
             }
 
-            skippableRanges.Add(episode.EpisodeId, skipRange);
+            skippableRanges.Add(episode.ItemId, skipRange);
         }
 
-        Plugin.Instance!.UpdateTimestamps(skippableRanges, mode);
+        if (skippableRanges.Count != 0)
+        {
+            _logger.LogDebug("Save {Count} segment/s", skippableRanges.Count);
+            Plugin.Instance!.UpdateTimestamps(skippableRanges, mode);
+        }
+        else
+        {
+            _logger.LogDebug("No segments to save");
+        }
 
         return analysisQueue
-            .Where(x => !skippableRanges.ContainsKey(x.EpisodeId))
+            .Where(x => !skippableRanges.ContainsKey(x.ItemId))
             .ToList()
             .AsReadOnly();
     }
@@ -81,13 +89,13 @@ public class ChapterAnalyzer : IMediaFileAnalyzer
     /// <param name="expression">Regular expression pattern.</param>
     /// <param name="mode">Analysis mode.</param>
     /// <returns>Intro object containing skippable time range, or null if no chapter matched.</returns>
-    public Intro? FindMatchingChapter(
-        QueuedEpisode episode,
+    public Segment? FindMatchingChapter(
+        QueuedMedia episode,
         Collection<ChapterInfo> chapters,
         string expression,
         AnalysisMode mode)
     {
-        Intro? matchingChapter = null;
+        Segment? matchingChapter = null;
 
         var config = Plugin.Instance?.Configuration ?? new Configuration.PluginConfiguration();
 
@@ -149,7 +157,7 @@ public class ChapterAnalyzer : IMediaFileAnalyzer
                 continue;
             }
 
-            matchingChapter = new(episode.EpisodeId, currentRange);
+            matchingChapter = new(episode.ItemId, episode.IsEpisode, currentRange);
             _logger.LogTrace("{Base}: okay", baseMessage);
             break;
         }

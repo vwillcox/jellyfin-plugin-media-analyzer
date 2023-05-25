@@ -23,7 +23,7 @@
                                 </select>
                                 <div class="fieldDescription">
                                     Recommend an Action for Intro Segments <br />
-                                    <strong>Just change if you don't like the Jellyfin default of 'Auto'.</strong>
+                                    <strong>Just change if you don't like the Jellyfin default of 'Prompt'.</strong>
                                 </div>
                             </div>
 
@@ -38,7 +38,22 @@
                                 </select>
                                 <div class="fieldDescription">
                                     Recommend an Action for Outro Segments <br />
-                                    <strong>Just change if you don't like the Jellyfin default of 'Auto'.</strong>
+                                    <strong>Just change if you don't like the Jellyfin default of 'Prompt'.</strong>
+                                </div>
+                            </div>
+
+                            <div class="selectContainer">
+                                <label class="selectLabel" for="MoviesOutroAction">Movie Outro Action</label>
+                                <select is="emby-select" id="MoviesOutroAction" class="emby-select-withcolor emby-select">
+                                    <option value="Auto">Auto</option>
+                                    <option value="None">None (Do nothing)</option>
+                                    <option value="Skip">Skip (Force Skip Outro)</option>
+                                    <option value="Mute">Mute (Mute the Outro)</option>
+                                    <option value="Prompt">Prompt (Ask user for skip)</option>
+                                </select>
+                                <div class="fieldDescription">
+                                    Recommend an Action for Outro Segments <br />
+                                    <strong>Just change if you don't like the Jellyfin default of 'Prompt'.</strong>
                                 </div>
                             </div>
 
@@ -53,22 +68,55 @@
                                 <div class="fieldDescription">Analyze show extras (specials).</div>
                             </div>
 
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="CacheFingerprints" type="checkbox" is="emby-checkbox" />
+                                    <span>Cache Fringerprints</span>
+                                </label>
+
+                                <div class="fieldDescription">Requires lot's of disk space. Should be just enabled for development</div>
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableBlacklist" type="checkbox" is="emby-checkbox" />
+                                    <span>Enable Blacklisting</span>
+                                </label>
+
+                                <div class="fieldDescription">If we can't find an Intro/Outro Segment for an episode or movie it is blacklisted to prevent repeated analysis. You can disable this behaviour.</div>
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="ResetBlacklist" type="checkbox" is="emby-checkbox" />
+                                    <span>Delete Blacklist</span>
+                                </label>
+
+                                <div class="fieldDescription">Delete the blacklist of segments.</div>
+                            </div>
+
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="MaxParallelism"> Maximum degree of parallelism </label>
                                 <input id="MaxParallelism" type="number" is="emby-input" min="1" />
-                                <div class="fieldDescription">Maximum degree of parallelism to use when analyzing episodes.</div>
+                                <div class="fieldDescription">Maximum degree of parallelism to use when analyzing.</div>
                             </div>
 
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="SelectedLibraries"> Limit analysis to the following libraries </label>
                                 <input id="SelectedLibraries" type="text" is="emby-input" />
-                                <div class="fieldDescription">Enter the names of libraries to analyze, separated by commas. If this field is left blank, all libraries on the server containing television episodes will be analyzed.</div>
+                                <div class="fieldDescription">Enter the names of libraries to analyze, separated by commas. If this field is left blank, all libraries on the server containing movies or television episodes will be analyzed.</div>
                             </div>
 
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="SkippedTvShows"> Skip TV Shows </label>
                                 <input id="SkippedTvShows" type="text" is="emby-input" />
                                 <div class="fieldDescription">Enter the names of tv shows to skip the analyze, separated by commas. You can also skip seasons. Format: "My Show;S01;S02, Another Show, Third Show;S03;S05"</div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="SkippedMovies"> Skip Movies </label>
+                                <input id="SkippedMovies" type="text" is="emby-input" />
+                                <div class="fieldDescription">Enter the names of Movies to skip the analyze, separated by commas. Format: "The Godfather, Spiderman, Matrix"</div>
                             </div>
 
                             <details id="intro_reqs">
@@ -105,6 +153,34 @@
 
                                     Increasing either of these settings will cause episode analysis to take much longer.
                                 </p>
+                            </details>
+
+                            <details id="outros_reqs">
+                                <summary>Modify Credits requirements</summary>
+
+                                <div class="inputContainer">
+                                    <label class="inputLabel inputLabelUnfocused" for="BlackFrameMinimumPercentage"> Black frame (in percent) </label>
+                                    <input id="BlackFrameMinimumPercentage" type="number" is="emby-input" min="60" max="99" />
+                                    <div class="fieldDescription">Sets the minimum percentage of a frame that must consist of black pixels before it is considered a black frame.</div>
+                                </div>
+
+                                <div class="inputContainer">
+                                    <label class="inputLabel inputLabelUnfocused" for="MinimumCreditsDuration"> Minimum credits duration (in seconds) </label>
+                                    <input id="MinimumCreditsDuration" type="number" is="emby-input" min="1" />
+                                    <div class="fieldDescription">Sets the minimum length of similar audio that will be considered ending credits.</div>
+                                </div>
+
+                                <div class="inputContainer">
+                                    <label class="inputLabel inputLabelUnfocused" for="MaximumEpisodeCreditsDuration"> Maximum episode credits duration (in seconds) </label>
+                                    <input id="MaximumEpisodeCreditsDuration" type="number" is="emby-input" min="1" />
+                                    <div class="fieldDescription">Sets the upper limit on the length of each episode that will be analyzed when searching for ending credits.</div>
+                                </div>
+
+                                <div class="inputContainer">
+                                    <label class="inputLabel inputLabelUnfocused" for="MaximumMovieCreditsDuration"> Maximum movie credits duration (in seconds) </label>
+                                    <input id="MaximumMovieCreditsDuration" type="number" is="emby-input" min="1" />
+                                    <div class="fieldDescription">Sets the upper limit on the length of each movie that will be analyzed when searching for ending credits.</div>
+                                </div>
                             </details>
 
                             <details id="silence">
@@ -250,20 +326,26 @@
                     // General
                     "SeriesIntroAction",
                     "SeriesOutroAction",
+                    "MoviesOutroAction",
                     // analysis
                     "MaxParallelism",
                     "SelectedLibraries",
                     "SkippedTvShows",
+                    "SkippedMovies",
                     "AnalysisPercent",
                     "AnalysisLengthLimit",
                     "MinimumIntroDuration",
                     "MaximumIntroDuration",
+                    "MinimumCreditsDuration",
+                    "MaximumEpisodeCreditsDuration",
+                    "MaximumMovieCreditsDuration",
+                    "BlackFrameMinimumPercentage",
                     // internals
                     "SilenceDetectionMaximumNoise",
                     "SilenceDetectionMinimumDuration",
                 ];
 
-                var booleanConfigurationFields = ["AnalyzeSeasonZero"];
+                var booleanConfigurationFields = ["AnalyzeSeasonZero","CacheFingerprints","ResetBlacklist","EnableBlacklist"];
 
                 // visualizer elements
                 var canvas = document.querySelector("canvas#troubleshooter");
@@ -273,7 +355,6 @@
                 var selectEpisode2 = document.querySelector("select#troubleshooterEpisode2");
                 var txtOffset = document.querySelector("input#offset");
                 var txtSuggested = document.querySelector("span#suggestedShifts");
-                var btnSeasonEraseTimestamps = document.querySelector("button#btnEraseSeasonTimestamps");
                 var btnUpdateTimestamps = document.querySelector("button#btnUpdateTimestamps");
                 var timeContainer = document.querySelector("span#timestampContainer");
 
@@ -399,27 +480,27 @@
                     // Try to get the timestamps of each intro, falling back a default value of zero if no intro was found
                     let leftEpisodeIntro = await getJson("MediaSegment?type=Intro&typeIndex=0&itemId=" + leftEpisode.value);
                     if (!leftEpisodeIntro.Items.length) {
-                        leftEpisodeIntro = { IntroStart: 0, IntroEnd: 0 };
+                        leftEpisodeIntro = { Start: 0, End: 0 };
                     } else {
-                        leftEpisodeIntro = { IntroStart: leftEpisodeIntro.Items[0].Start, IntroEnd: leftEpisodeIntro.Items[0].End };
+                        leftEpisodeIntro = { Start: leftEpisodeIntro.Items[0].Start, End: leftEpisodeIntro.Items[0].End };
                     }
 
                     let rightEpisodeIntro = await getJson("MediaSegment?type=Intro&typeIndex=0&itemId=" + rightEpisode.value);
                     if (!rightEpisodeIntro.Items.length) {
-                        rightEpisodeIntro = { IntroStart: 0, IntroEnd: 0 };
+                        rightEpisodeIntro = { Start: 0, End: 0 };
                     } else {
-                        rightEpisodeIntro = { IntroStart: rightEpisodeIntro.Items[0].Start, IntroEnd: rightEpisodeIntro.Items[0].End };
+                        rightEpisodeIntro = { Start: rightEpisodeIntro.Items[0].Start, End: rightEpisodeIntro.Items[0].End };
                     }
 
                     // Update the editor for the first and second episodes
                     document.querySelector("#timestampEditor").style.display = "unset";
                     document.querySelector("#editLeftEpisodeTitle").textContent = leftEpisode.text;
-                    document.querySelector("#editLeftEpisodeStart").value = Math.round(leftEpisodeIntro.IntroStart);
-                    document.querySelector("#editLeftEpisodeEnd").value = Math.round(leftEpisodeIntro.IntroEnd);
+                    document.querySelector("#editLeftEpisodeStart").value = Math.round(leftEpisodeIntro.Start);
+                    document.querySelector("#editLeftEpisodeEnd").value = Math.round(leftEpisodeIntro.End);
 
                     document.querySelector("#editRightEpisodeTitle").textContent = rightEpisode.text;
-                    document.querySelector("#editRightEpisodeStart").value = Math.round(rightEpisodeIntro.IntroStart);
-                    document.querySelector("#editRightEpisodeEnd").value = Math.round(rightEpisodeIntro.IntroEnd);
+                    document.querySelector("#editRightEpisodeStart").value = Math.round(rightEpisodeIntro.Start);
+                    document.querySelector("#editRightEpisodeEnd").value = Math.round(rightEpisodeIntro.End);
                 }
 
                 // adds an item to a dropdown
@@ -518,11 +599,11 @@
                 // check that the user is still on the configuration page
                 function checkWindowHash() {
                     const h = location.hash;
-                    if (h === "#!/configurationpage?name=Intro%20Skipper" || h.includes("#!/dialog")) {
+                    if (h === "#!/configurationpage?name=Media%20Analyzer" || h.includes("#!/dialog")) {
                         return;
                     }
 
-                    console.debug("navigated away from intro skipper configuration page");
+                    console.debug("navigated away from media analyzer configuration page");
                     document.removeEventListener("keydown", keyDown);
                     clearInterval(windowHashInterval);
                 }
@@ -543,7 +624,7 @@
                             return;
                         }
 
-                        fetchWithAuth("JellyfinPluginIntroSkip/EraseTimestamps?mode=" + mode, "POST", null);
+                        fetchWithAuth("MediaSegment?creatorId=80885677-DACB-461B-AC97-EE7E971288AA&type="+mode, "DELETE", null);
 
                         Dashboard.alert(mode + " timestamps erased");
                     });
@@ -592,39 +673,26 @@
                 selectEpisode1.addEventListener("change", episodeChanged);
                 selectEpisode2.addEventListener("change", episodeChanged);
                 btnEraseIntroTimestamps.addEventListener("click", (e) => {
-                    eraseTimestamps("Introduction");
+                    eraseTimestamps("Intro");
                     e.preventDefault();
                 });
                 btnEraseCreditTimestamps.addEventListener("click", (e) => {
-                    eraseTimestamps("Credits");
+                    eraseTimestamps("Outro");
                     e.preventDefault();
-                });
-                btnSeasonEraseTimestamps.addEventListener("click", () => {
-                    Dashboard.confirm("Are you sure you want to erase all timestamps for this season?", "Confirm timestamp erasure", (result) => {
-                        if (!result) {
-                            return;
-                        }
-
-                        const show = selectShow.value;
-                        const season = selectSeason.value;
-
-                        const url = "JellyfinPluginIntroSkip/Show/" + encodeURIComponent(show) + "/" + encodeURIComponent(season);
-                        fetchWithAuth(url, "DELETE", null);
-
-                        Dashboard.alert("Erased timestamps for " + season + " of " + show);
-                    });
                 });
                 btnUpdateTimestamps.addEventListener("click", () => {
                     const lhsId = selectEpisode1.options[selectEpisode1.selectedIndex].value;
                     const newLhsIntro = {
-                        IntroStart: document.querySelector("#editLeftEpisodeStart").value,
-                        IntroEnd: document.querySelector("#editLeftEpisodeEnd").value,
+                        Start: document.querySelector("#editLeftEpisodeStart").value,
+                        End: document.querySelector("#editLeftEpisodeEnd").value,
+                        itemId: lhsId
                     };
 
                     const rhsId = selectEpisode2.options[selectEpisode2.selectedIndex].value;
                     const newRhsIntro = {
-                        IntroStart: document.querySelector("#editRightEpisodeStart").value,
-                        IntroEnd: document.querySelector("#editRightEpisodeEnd").value,
+                        Start: document.querySelector("#editRightEpisodeStart").value,
+                        End: document.querySelector("#editRightEpisodeEnd").value,
+                        itemId: rhsId
                     };
 
                     fetchWithAuth("JellyfinPluginIntroSkip/Episode/" + lhsId + "/UpdateIntroTimestamps", "POST", JSON.stringify(newLhsIntro));

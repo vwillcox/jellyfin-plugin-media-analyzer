@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
@@ -17,34 +18,38 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public class QueueManager
 {
+    private readonly AnalysisMode _analysisMode;
     private ILibraryManager _libraryManager;
     private ILogger<QueueManager> _logger;
-
     private double analysisPercent;
     private List<string> selectedLibraries;
     private Dictionary<string, List<int>> skippedTvShows;
-    private Dictionary<Guid, List<QueuedEpisode>> _queuedEpisodes;
+    private List<string> skippedMovies;
+    private Dictionary<Guid, List<QueuedMedia>> _queuedEpisodes;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="QueueManager"/> class.
     /// </summary>
     /// <param name="logger">Logger.</param>
     /// <param name="libraryManager">Library manager.</param>
-    public QueueManager(ILogger<QueueManager> logger, ILibraryManager libraryManager)
+    /// <param name="mode">Analysis mode.</param>
+    public QueueManager(ILogger<QueueManager> logger, ILibraryManager libraryManager, AnalysisMode mode)
     {
         _logger = logger;
         _libraryManager = libraryManager;
+        _analysisMode = mode;
 
         selectedLibraries = new();
         _queuedEpisodes = new();
         skippedTvShows = new();
+        skippedMovies = new();
     }
 
     /// <summary>
     /// Gets all media items on the server.
     /// </summary>
     /// <returns>Queued media items.</returns>
-    public ReadOnlyDictionary<Guid, List<QueuedEpisode>> GetMediaItems()
+    public ReadOnlyDictionary<Guid, List<QueuedMedia>> GetMediaItems()
     {
         // Assert that ffmpeg with chromaprint is installed
         if (!FFmpegWrapper.CheckFFmpegVersion())
@@ -104,6 +109,11 @@ public class QueueManager
 
         // Get the list of library names which have been selected for analysis, ignoring whitespace and empty entries.
         selectedLibraries = config.SelectedLibraries
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        // Get the list movie names which should be skipped.
+        skippedMovies = config.SkippedMovies
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
 
@@ -168,6 +178,14 @@ public class QueueManager
     {
         _logger.LogDebug("Constructing anonymous internal query");
 
+        var includes = new BaseItemKind[] { BaseItemKind.Episode };
+
+        // When analyzing for credits also search for movies
+        if (_analysisMode == AnalysisMode.Credits)
+        {
+            includes = includes.Concat(new BaseItemKind[] { BaseItemKind.Movie }).ToArray();
+        }
+
         var query = new InternalItemsQuery()
         {
             // Order by series name, season, and then episode number so that status updates are logged in order
@@ -178,7 +196,7 @@ public class QueueManager
                 ("ParentIndexNumber", SortOrder.Ascending),
                 ("IndexNumber", SortOrder.Ascending),
             },
-            IncludeItemTypes = new BaseItemKind[] { BaseItemKind.Episode },
+            IncludeItemTypes = includes,
             Recursive = true,
             IsVirtualItem = false
         };
@@ -193,7 +211,7 @@ public class QueueManager
             return;
         }
 
-        // Queue all episodes on the server for fingerprinting.
+        // Queue all media on the server for fingerprinting.
         _logger.LogDebug("Iterating through library items");
 
         foreach (var item in items)
@@ -208,12 +226,25 @@ public class QueueManager
 
                 QueueEpisode(episode);
             }
+            else if (item is Movie movie)
+            {
+                if (skippedMovies.Contains(movie.Name))
+                {
+                    _logger.LogInformation("Skipping Movie: '{Name}'", movie.Name);
+                    continue;
+                }
 
-            _logger.LogDebug("Item {Name} is not an episode", item.Name);
-            continue;
+                _logger.LogInformation("Adding movie: '{Name}'", movie.Name);
+                QueueMovie(movie);
+            }
+            else
+            {
+                _logger.LogDebug("Item {Name} is not an episode or movie", item.Name);
+                continue;
+            }
         }
 
-        _logger.LogDebug("Queued {Count} episodes", items.Count);
+        _logger.LogDebug("Queued {Count} media items", items.Count);
     }
 
     // Test if should skip the episode
@@ -244,6 +275,16 @@ public class QueueManager
             return;
         }
 
+        if (episode.RunTimeTicks is null)
+        {
+            _logger.LogWarning(
+                "Not queuing episode \"{Name}\" from series \"{Series}\" ({Id}) as no duration was provided by Jellyfin",
+                episode.Name,
+                episode.SeriesName,
+                episode.Id);
+            return;
+        }
+
         // Limit analysis to the first X% of the episode and at most Y minutes.
         // X and Y default to 30% and 15 minutes.
         var duration = TimeSpan.FromTicks(episode.RunTimeTicks ?? 0).TotalSeconds;
@@ -259,20 +300,80 @@ public class QueueManager
             60 * Plugin.Instance!.Configuration.AnalysisLengthLimit);
 
         // Allocate a new list for each new season
-        _queuedEpisodes.TryAdd(episode.SeasonId, new List<QueuedEpisode>());
+        _queuedEpisodes.TryAdd(episode.SeasonId, new List<QueuedMedia>());
 
         // Queue the episode for analysis
         var maxCreditsDuration = Plugin.Instance!.Configuration.MaximumEpisodeCreditsDuration;
-        _queuedEpisodes[episode.SeasonId].Add(new QueuedEpisode()
+        _queuedEpisodes[episode.SeasonId].Add(new QueuedMedia()
         {
             SeriesName = episode.SeriesName,
             SeasonNumber = episode.AiredSeasonNumber ?? 0,
-            EpisodeId = episode.Id,
+            ItemId = episode.Id,
             Name = episode.Name,
             Path = episode.Path,
             Duration = Convert.ToInt32(duration),
             IntroFingerprintEnd = Convert.ToInt32(fingerprintDuration),
             CreditsFingerprintStart = Convert.ToInt32(duration - maxCreditsDuration),
+        });
+
+        Plugin.Instance!.TotalQueued++;
+    }
+
+    private void QueueMovie(Movie movie)
+    {
+        if (Plugin.Instance is null)
+        {
+            throw new InvalidOperationException("plugin instance was null");
+        }
+
+        if (string.IsNullOrEmpty(movie.Path))
+        {
+            _logger.LogWarning(
+                "Not queuing movie \"{Name}\" ({Id}) as no path was provided by Jellyfin",
+                movie.Name,
+                movie.Id);
+            return;
+        }
+
+        if (movie.RunTimeTicks is null)
+        {
+            _logger.LogWarning(
+                "Not queuing Movie \"{Name}\" ({Id}) as no duration was provided by Jellyfin",
+                movie.Name,
+                movie.Id);
+            return;
+        }
+
+        // Limit analysis to the first X% of the episode and at most Y minutes.
+        // X and Y default to 30% and 15 minutes.
+        var duration = TimeSpan.FromTicks(movie.RunTimeTicks ?? 0).TotalSeconds;
+        var fingerprintDuration = duration;
+
+        if (fingerprintDuration >= 5 * 60)
+        {
+            fingerprintDuration *= analysisPercent;
+        }
+
+        fingerprintDuration = Math.Min(
+            fingerprintDuration,
+            60 * Plugin.Instance!.Configuration.AnalysisLengthLimit);
+
+        // Allocate a new list for each movie
+        _queuedEpisodes.TryAdd(movie.Id, new List<QueuedMedia>());
+
+        // Queue the movie for analysis
+        var maxCreditsDuration = Plugin.Instance!.Configuration.MaximumMovieCreditsDuration;
+        _queuedEpisodes[movie.Id].Add(new QueuedMedia()
+        {
+            SeriesName = movie.Name,
+            SeasonNumber = 0,
+            ItemId = movie.Id,
+            Name = movie.Name,
+            Path = movie.Path,
+            Duration = Convert.ToInt32(duration),
+            IntroFingerprintEnd = Convert.ToInt32(fingerprintDuration),
+            CreditsFingerprintStart = Convert.ToInt32(duration - maxCreditsDuration),
+            IsEpisode = false,
         });
 
         Plugin.Instance!.TotalQueued++;
@@ -285,30 +386,33 @@ public class QueueManager
     /// <param name="candidates">Queued media items.</param>
     /// <param name="mode">Analysis mode.</param>
     /// <returns>Media items that have been verified to exist in Jellyfin and in storage.</returns>
-    public (ReadOnlyCollection<QueuedEpisode> VerifiedItems, bool AnyUnanalyzed)
-        VerifyQueue(ReadOnlyCollection<QueuedEpisode> candidates, AnalysisMode mode)
+    public (ReadOnlyCollection<QueuedMedia> VerifiedItems, bool AnyUnanalyzed)
+        VerifyQueue(ReadOnlyCollection<QueuedMedia> candidates, AnalysisMode mode)
     {
         var unanalyzed = false;
-        var verified = new List<QueuedEpisode>();
-
-        var timestamps = mode == AnalysisMode.Introduction ?
-                Plugin.Instance!.Intros :
-                Plugin.Instance!.Credits;
+        var verified = new List<QueuedMedia>();
+        var blacklisted = Plugin.Instance!.Blacklist;
 
         foreach (var candidate in candidates)
         {
             try
             {
-                var path = Plugin.Instance!.GetItemPath(candidate.EpisodeId);
+                var path = Plugin.Instance!.GetItemPath(candidate.ItemId);
 
                 if (File.Exists(path))
                 {
-                    verified.Add(candidate);
-                }
+                    var timestamps = Plugin.Instance!.GetMediaSegmentsById(candidate.ItemId, mode);
 
-                if (!timestamps.ContainsKey(candidate.EpisodeId))
-                {
-                    unanalyzed = true;
+                    if (!timestamps.ContainsKey(candidate.ItemId) && !blacklisted.Any(s => s.ItemId == candidate.ItemId && s.Type == (mode == AnalysisMode.Introduction ? MediaSegmentType.Intro : MediaSegmentType.Outro)))
+                    {
+                        unanalyzed = true;
+                    }
+                    else
+                    {
+                        candidate.IsAnalyzed = true;
+                    }
+
+                    verified.Add(candidate);
                 }
             }
             catch (Exception ex)
@@ -317,7 +421,7 @@ public class QueueManager
                     "Skipping {Mode} analysis of {Name} ({Id}): {Exception}",
                     mode,
                     candidate.Name,
-                    candidate.EpisodeId,
+                    candidate.ItemId,
                     ex);
             }
         }

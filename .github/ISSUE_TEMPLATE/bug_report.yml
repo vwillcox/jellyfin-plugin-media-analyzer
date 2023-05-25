@@ -33,16 +33,10 @@ body:
     validations:
       required: true
 
-  - type: input
-    attributes:
-      label: Container image and tag
-      description: Only fill in this field if you are running Jellyfin in a container
-      placeholder: jellyfin/jellyfin:10.8.7, jellyfin-intro-skipper:latest, etc.
-
   - type: textarea
     attributes:
       label: Support Bundle
-      placeholder: go to Dashboard -> Plugins -> Intro Skipper -> Support Bundle (at the bottom of the page) and paste the contents of the textbox here
+      placeholder: go to Dashboard -> Plugins -> Media Analyzer -> Support Bundle (at the bottom of the page) and paste the contents of the textbox here
     validations:
       required: true
 

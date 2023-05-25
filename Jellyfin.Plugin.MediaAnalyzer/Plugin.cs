@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.Serialization;
 using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.MediaAnalyzer.Configuration;
@@ -24,11 +27,14 @@ namespace Jellyfin.Plugin.MediaAnalyzer;
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
+    private readonly object _serializationLock = new();
     private IXmlSerializer _xmlSerializer;
     private ILibraryManager _libraryManager;
     private IItemRepository _itemRepository;
     private IMediaSegmentsManager _mediaSegmentsManager;
     private ILogger<Plugin> _logger;
+    private string _pluginCachePath;
+    private string _pluginDbPath;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Plugin"/> class.
@@ -59,8 +65,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _logger = logger;
 
         FFmpegPath = serverConfiguration.GetEncodingOptions().EncoderAppPathDisplay;
+        Blacklist = new List<BlacklistSegment>();
 
-        FingerprintCachePath = Path.Join(applicationPaths.PluginConfigurationsPath, "chromaprints");
+        _pluginCachePath = Path.Join(applicationPaths.CachePath, "JFPMediaAnalyzer");
+        _pluginDbPath = Path.Join(_pluginCachePath, "jfpmediaanalyzer.db");
+
+        FingerprintCachePath = Path.Join(_pluginCachePath, "chromaprints");
 
         // Create the base & cache directories (if needed).
         if (!Directory.Exists(FingerprintCachePath))
@@ -68,31 +78,17 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             Directory.CreateDirectory(FingerprintCachePath);
         }
 
+        // Create and migrate db
+        // using var db = new MediaAnalyzerDbContext(this._pluginDbPath);
+        // db.ApplyMigrations();
+
         ConfigurationChanged += OnConfigurationChanged;
-
-        // get all stored segments
-        RegenerateCache();
     }
-
-    /// <summary>
-    /// Fired after configuration has been saved so the auto skip timer can be stopped or started.
-    /// </summary>
-    public event EventHandler? AutoSkipChanged;
-
-    /// <summary>
-    /// Gets the results of fingerprinting all episodes.
-    /// </summary>
-    public Dictionary<Guid, Intro> Intros { get; private set; } = new();
-
-    /// <summary>
-    /// Gets all discovered ending credits.
-    /// </summary>
-    public Dictionary<Guid, Intro> Credits { get; private set; } = new();
 
     /// <summary>
     /// Gets the most recent media item queue.
     /// </summary>
-    public Dictionary<Guid, List<QueuedEpisode>> QueuedMediaItems { get; } = new();
+    public Dictionary<Guid, List<QueuedMedia>> QueuedMediaItems { get; } = new();
 
     /// <summary>
     /// Gets or sets the total number of episodes in the queue.
@@ -121,6 +117,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public static Plugin? Instance { get; private set; }
 
     /// <summary>
+    /// Gets list for Blacklisted elements. Just available during scans.
+    /// </summary>
+    public ICollection<BlacklistSegment> Blacklist { get; private set; }
+
+    /// <summary>
     /// Delete segments from.
     /// </summary>
     /// <param name="type">Type of Media segment.</param>
@@ -131,96 +132,68 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <summary>
-    /// Regenerate cached segments.
+    /// Delete segments by id.
     /// </summary>
-    public void RegenerateCache()
+    /// <param name="itemId">Type of Media segment.</param>
+    /// <returns>Task.</returns>
+    public async Task DeleteSegementsById(Guid itemId)
     {
-        var segments = _mediaSegmentsManager.GetAllMediaSegments();
-        var intro = segments.FindAll(s => s.Type == MediaSegmentType.Intro);
-        var outro = segments.FindAll(s => s.Type == MediaSegmentType.Outro);
-        var intros = new Dictionary<Guid, Intro>();
+        _logger.LogDebug("Delete Segments for itemId: {Item}", itemId);
 
-        foreach (var item in intro)
-        {
-            intros.Add(item.ItemId, new Intro()
-            {
-                EpisodeId = item.ItemId,
-                IntroStart = item.Start,
-                IntroEnd = item.End,
-                FromDB = true
-            });
-        }
-
-        Intros = intros;
-        intros.Clear();
-
-        foreach (var item in outro)
-        {
-            intros.Add(item.ItemId, new Intro()
-            {
-                EpisodeId = item.ItemId,
-                IntroStart = item.Start,
-                IntroEnd = item.End,
-                FromDB = true
-            });
-        }
-
-        Credits = intros;
+        await _mediaSegmentsManager.DeleteSegmentsAsync(creatorId: Id, itemId: itemId).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Push missing segments to db.
+    /// Get segments from db by mode and id.
     /// </summary>
-    /// <returns>Task.</returns>
-    public async Task SaveSegments()
+    /// <param name="itemId">Item Id.</param>
+    /// <param name="mode">Mode of analysis.</param>
+    /// <returns>Dictionary of guid,segments.</returns>
+    public Dictionary<Guid, Segment> GetMediaSegmentsById(Guid itemId, AnalysisMode mode)
     {
-        var allSegments = new List<MediaSegment>();
-        foreach (var (key, value) in Intros)
+        var type = mode == AnalysisMode.Introduction ? MediaSegmentType.Intro : MediaSegmentType.Outro;
+        var segments = _mediaSegmentsManager.GetAllMediaSegments(itemId: itemId, type: type);
+        var intros = new Dictionary<Guid, Segment>();
+
+        foreach (var item in segments)
         {
-            _logger.LogInformation(
-                "save intro id? {0} = {1}",
-                value.EpisodeId,
-                !value.FromDB);
-
-            if (!value.FromDB)
+            intros.Add(item.ItemId, new Segment()
             {
-                var seg = new MediaSegment()
-                {
-                    Start = value.IntroStart,
-                    End = value.IntroEnd,
-                    ItemId = value.EpisodeId,
-                    CreatorId = Id,
-                    Type = MediaSegmentType.Intro,
-                    Action = Plugin.Instance?.Configuration.SeriesIntroAction ?? MediaSegmentAction.Auto
-                };
-
-                allSegments.Add(seg);
-                value.FromDB = true;
-            }
+                ItemId = item.ItemId,
+                Start = item.Start,
+                End = item.End,
+            });
         }
 
-        foreach (var (key, value) in Credits)
+        return intros;
+    }
+
+    /// <summary>
+    /// Create/Update segments in db.
+    /// </summary>
+    /// <param name="segments">List if segments.</param>
+    /// <param name="mode">Mode of analysis.</param>
+    /// <returns>Task.</returns>
+    public async Task SaveSegmentsAsync(Dictionary<Guid, Segment> segments, AnalysisMode mode)
+    {
+        var allSegments = new List<MediaSegment>();
+        var type = mode == AnalysisMode.Introduction ? MediaSegmentType.Intro : MediaSegmentType.Outro;
+        var episodeAction = mode == AnalysisMode.Introduction ? this.Configuration.SeriesIntroAction : this.Configuration.SeriesOutroAction;
+        var movieAction = this.Configuration.MoviesOutroAction;
+
+        foreach (var (key, value) in segments)
         {
-            _logger.LogInformation(
-                "save outro id? {0} = {1}",
-                value.EpisodeId,
-                !value.FromDB);
-
-            if (!value.FromDB)
+            var seg = new MediaSegment()
             {
-                var seg = new MediaSegment()
-                {
-                    Start = value.IntroStart,
-                    End = value.IntroEnd,
-                    ItemId = value.EpisodeId,
-                    CreatorId = Id,
-                    Type = MediaSegmentType.Outro,
-                    Action = Plugin.Instance?.Configuration.SeriesOutroAction ?? MediaSegmentAction.Auto
-                };
+                Start = value.Start,
+                End = value.End,
+                ItemId = value.ItemId,
+                CreatorId = this.Id,
+                Type = type,
+                Action = value.IsEpisode ? episodeAction : movieAction,
+            };
 
-                allSegments.Add(seg);
-                value.FromDB = true;
-            }
+            allSegments.Add(seg);
         }
 
         await _mediaSegmentsManager.CreateMediaSegmentsAsync(allSegments).ConfigureAwait(false);
@@ -298,37 +271,96 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         return _itemRepository.GetChapters(GetItem(id));
     }
 
-    internal void UpdateTimestamps(Dictionary<Guid, Intro> newTimestamps, AnalysisMode mode)
+    /// <summary>
+    /// Update Timestamps. Sync wrapper around SaveSegmentsAsync.
+    /// </summary>
+    /// <param name="newTimestamps">New timestamps from analysis.</param>
+    /// <param name="mode">analysis mode.</param>
+    internal void UpdateTimestamps(Dictionary<Guid, Segment> newTimestamps, AnalysisMode mode)
     {
-        foreach (var intro in newTimestamps)
-        {
-            if (mode == AnalysisMode.Introduction)
-            {
-                Plugin.Instance!.Intros[intro.Key] = intro.Value;
-            }
-            else if (mode == AnalysisMode.Credits)
-            {
-                Plugin.Instance!.Credits[intro.Key] = intro.Value;
-            }
-        }
-
-        var task = Task.Run(async () => { await Plugin.Instance!.SaveSegments().ConfigureAwait(false); });
+        var task = Task.Run(async () => { await Plugin.Instance!.SaveSegmentsAsync(newTimestamps, mode).ConfigureAwait(false); });
         task.Wait();
     }
 
     /// <summary>
-    /// Remove a intro segment from db. Used by plugin webconfig.
+    /// Save blacklisted segments to disk.
     /// </summary>
-    /// <param name="itemId">Item id.</param>
-    /// <returns>Task.</returns>
-    public async Task RemoveSegment(Guid itemId)
+    /// <param name="media">Media to blacklist.</param>
+    /// <param name="mode">analysis mode.</param>
+    public void SaveBlacklist(ICollection<QueuedMedia> media, AnalysisMode mode)
     {
-        await _mediaSegmentsManager.DeleteSegmentsAsync(itemId: itemId, type: MediaSegmentType.Intro, typeIndex: 0).ConfigureAwait(false);
+        lock (_serializationLock)
+        {
+            var newBlackList = new List<BlacklistSegment>();
+
+            // transform to blacklist
+            foreach (var seg in media)
+            {
+                var segName = seg.IsEpisode ? string.Format(CultureInfo.InvariantCulture, "{0} S{1}: {2}", seg.SeriesName, seg.SeasonNumber, seg.Name) : string.Format(CultureInfo.InvariantCulture, "{0}", seg.Name);
+                var s = new BlacklistSegment
+                {
+                    ItemId = seg.ItemId,
+                    Type = mode == AnalysisMode.Introduction ? MediaSegmentType.Intro : MediaSegmentType.Outro,
+                    Name = segName,
+                };
+                _logger.LogDebug("Blacklisting: {Name}", segName);
+                newBlackList.Add(s);
+            }
+
+            // merge with old list
+            foreach (var seg in newBlackList)
+            {
+                if (!this.Blacklist.Contains(seg))
+                {
+                    this.Blacklist.Add(seg);
+                }
+            }
+
+            // update db
+            // using var db = new MediaAnalyzerDbContext(this._pluginCachePath);
+            // db.SaveChanges();
+        }
+    }
+
+    /// <summary>
+    /// Delete Blacklist database.
+    /// </summary>
+    public void DeleteBlacklist()
+    {
+        /*
+        using var db = new MediaAnalyzerDbContext(this._pluginCachePath);
+        var delete = db.BlacklistSegment.ToList();
+        db.RemoveRange(delete);
+        db.SaveChanges();
+        */
+    }
+
+    /// <summary>
+    /// Get previous blacklisted segments and store them in memory.
+    /// </summary>
+    public void GetBlacklistFromDb()
+    {
+        /*
+        if (this.Configuration.EnableBlacklist)
+        {
+            using var db = new MediaAnalyzerDbContext(this._pluginCachePath);
+            this.Blacklist = db.BlacklistSegment.ToList();
+        }
+        else
+        {
+            this.Blacklist.Clear();
+        }
+        */
     }
 
     private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
     {
-        AutoSkipChanged?.Invoke(this, EventArgs.Empty);
+        if (this.Configuration.ResetBlacklist == true)
+        {
+            this.DeleteBlacklist();
+            this.Configuration.ResetBlacklist = false;
+            this.SaveConfiguration(this.Configuration);
+        }
     }
 
     /// <summary>
@@ -337,7 +369,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override void OnUninstalling()
     {
         // Blocking thread, other solution?
-        var task = Task.Run(async () => { await _mediaSegmentsManager.DeleteSegmentsAsync(creatorId: Id).ConfigureAwait(false); });
+        var task = Task.Run(async () => { await _mediaSegmentsManager.DeleteSegmentsAsync(creatorId: this.Id).ConfigureAwait(false); });
         task.Wait();
+
+        // Delete cache data
+        if (Directory.Exists(_pluginCachePath))
+        {
+            Directory.Delete(_pluginCachePath, true);
+        }
     }
 }

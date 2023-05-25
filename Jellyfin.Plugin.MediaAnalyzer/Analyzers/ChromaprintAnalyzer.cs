@@ -3,6 +3,7 @@ namespace Jellyfin.Plugin.MediaAnalyzer;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Numerics;
 using System.Threading;
 using Microsoft.Extensions.Logging;
@@ -49,31 +50,53 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
     }
 
     /// <inheritdoc />
-    public ReadOnlyCollection<QueuedEpisode> AnalyzeMediaFiles(
-        ReadOnlyCollection<QueuedEpisode> analysisQueue,
+    public ReadOnlyCollection<QueuedMedia> AnalyzeMediaFiles(
+        ReadOnlyCollection<QueuedMedia> analysisQueue,
         AnalysisMode mode,
         CancellationToken cancellationToken)
     {
-        // All intros for this season.
-        var seasonIntros = new Dictionary<Guid, Intro>();
+        // All segments for this season.
+        var seasonSegments = new Dictionary<Guid, Segment>();
 
         // Cache of all fingerprints for this season.
         var fingerprintCache = new Dictionary<Guid, uint[]>();
 
-        // Episode analysis queue.
-        var episodeAnalysisQueue = new List<QueuedEpisode>(analysisQueue);
+        // Episode analysis queue based on not analyzed episodes
+        var episodeAnalysisQueue = analysisQueue.ToList().Where(m => !m.IsAnalyzed).ToList();
 
         // Episodes that were analyzed and do not have an introduction.
-        var episodesWithoutIntros = new List<QueuedEpisode>();
+        var episodesWithoutSegments = new List<QueuedMedia>();
 
         this._analysisMode = mode;
+
+        // we need at least two episodes, it's possible to use an already analzyed one as reference
+        if (episodeAnalysisQueue.Count == 1 && analysisQueue.Count > 1)
+        {
+            var item = analysisQueue.Where(i => !episodeAnalysisQueue.Contains(i)).FirstOrDefault();
+
+            if (item is not null)
+            {
+                episodeAnalysisQueue.Add(item);
+            }
+        }
+
+        // If we have just one episode, we can abort and flag the episode to skip blacklisting
+        if (episodeAnalysisQueue.Count == 1)
+        {
+            var item = episodeAnalysisQueue.First();
+            _logger.LogInformation("Found just one episode for {Series}: S{Season}. Skipping as we need at least two.", item.SeriesName, item.SeasonNumber);
+
+            item.SkipBlacklist = true;
+            episodesWithoutSegments.Add(item);
+            return episodesWithoutSegments.AsReadOnly();
+        }
 
         // Compute fingerprints for all episodes in the season
         foreach (var episode in episodeAnalysisQueue)
         {
             try
             {
-                fingerprintCache[episode.EpisodeId] = FFmpegWrapper.Fingerprint(episode, mode);
+                fingerprintCache[episode.ItemId] = FFmpegWrapper.Fingerprint(episode, mode);
 
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -86,7 +109,7 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
                 WarningManager.SetFlag(PluginWarning.InvalidChromaprintFingerprint);
 
                 // Fallback to an empty fingerprint on any error
-                fingerprintCache[episode.EpisodeId] = Array.Empty<uint>();
+                fingerprintCache[episode.ItemId] = Array.Empty<uint>();
             }
         }
 
@@ -102,10 +125,10 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
             {
                 // Compare the current episode to all remaining episodes in the queue.
                 var (currentIntro, remainingIntro) = CompareEpisodes(
-                    currentEpisode.EpisodeId,
-                    fingerprintCache[currentEpisode.EpisodeId],
-                    remainingEpisode.EpisodeId,
-                    fingerprintCache[remainingEpisode.EpisodeId]);
+                    currentEpisode.ItemId,
+                    fingerprintCache[currentEpisode.ItemId],
+                    remainingEpisode.ItemId,
+                    fingerprintCache[remainingEpisode.ItemId]);
 
                 // Ignore this comparison result if:
                 // - one of the intros isn't valid, or
@@ -127,34 +150,34 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
                  */
                 if (this._analysisMode == AnalysisMode.Credits)
                 {
-                    currentIntro.IntroStart += currentEpisode.CreditsFingerprintStart;
-                    currentIntro.IntroEnd += currentEpisode.CreditsFingerprintStart;
-                    remainingIntro.IntroStart += remainingEpisode.CreditsFingerprintStart;
-                    remainingIntro.IntroEnd += remainingEpisode.CreditsFingerprintStart;
+                    currentIntro.Start += currentEpisode.CreditsFingerprintStart;
+                    currentIntro.End += currentEpisode.CreditsFingerprintStart;
+                    remainingIntro.Start += remainingEpisode.CreditsFingerprintStart;
+                    remainingIntro.End += remainingEpisode.CreditsFingerprintStart;
                 }
 
                 // Only save the discovered intro if it is:
                 // - the first intro discovered for this episode
                 // - longer than the previously discovered intro
                 if (
-                    !seasonIntros.TryGetValue(currentIntro.EpisodeId, out var savedCurrentIntro) ||
+                    !seasonSegments.TryGetValue(currentIntro.ItemId, out var savedCurrentIntro) ||
                     currentIntro.Duration > savedCurrentIntro.Duration)
                 {
-                    seasonIntros[currentIntro.EpisodeId] = currentIntro;
+                    seasonSegments[currentIntro.ItemId] = currentIntro;
                 }
 
                 if (
-                    !seasonIntros.TryGetValue(remainingIntro.EpisodeId, out var savedRemainingIntro) ||
+                    !seasonSegments.TryGetValue(remainingIntro.ItemId, out var savedRemainingIntro) ||
                     remainingIntro.Duration > savedRemainingIntro.Duration)
                 {
-                    seasonIntros[remainingIntro.EpisodeId] = remainingIntro;
+                    seasonSegments[remainingIntro.ItemId] = remainingIntro;
                 }
 
                 break;
             }
 
             // If no intro is found at this point, the popped episode is not reinserted into the queue.
-            episodesWithoutIntros.Add(currentEpisode);
+            episodesWithoutSegments.Add(currentEpisode);
         }
 
         // If cancellation was requested, report that no episodes were analyzed.
@@ -166,12 +189,20 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
         if (this._analysisMode == AnalysisMode.Introduction)
         {
             // Adjust all introduction end times so that they end at silence.
-            seasonIntros = AdjustIntroEndTimes(analysisQueue, seasonIntros);
+            seasonSegments = AdjustIntroEndTimes(analysisQueue, seasonSegments);
         }
 
-        Plugin.Instance!.UpdateTimestamps(seasonIntros, this._analysisMode);
+        if (seasonSegments.Count != 0)
+        {
+            _logger.LogDebug("Save {Count} segment/s", seasonSegments.Count);
+            Plugin.Instance!.UpdateTimestamps(seasonSegments, this._analysisMode);
+        }
+        else
+        {
+            _logger.LogDebug("No segments to save");
+        }
 
-        return episodesWithoutIntros.AsReadOnly();
+        return episodesWithoutSegments.AsReadOnly();
     }
 
     /// <summary>
@@ -182,7 +213,7 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
     /// <param name="rhsId">Second episode id.</param>
     /// <param name="rhsPoints">Second episode fingerprint points.</param>
     /// <returns>Intros for the first and second episodes.</returns>
-    public (Intro Lhs, Intro Rhs) CompareEpisodes(
+    public (Segment Lhs, Segment Rhs) CompareEpisodes(
         Guid lhsId,
         uint[] lhsPoints,
         Guid rhsId,
@@ -204,7 +235,7 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
             lhsId,
             rhsId);
 
-        return (new Intro(lhsId), new Intro(rhsId));
+        return (new Segment(lhsId), new Segment(rhsId));
     }
 
     /// <summary>
@@ -215,7 +246,7 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
     /// <param name="rhsId">Second episode id.</param>
     /// <param name="rhsRanges">Second episode shared timecodes.</param>
     /// <returns>Intros for the first and second episodes.</returns>
-    private (Intro Lhs, Intro Rhs) GetLongestTimeRange(
+    private (Segment Lhs, Segment Rhs) GetLongestTimeRange(
         Guid lhsId,
         List<TimeRange> lhsRanges,
         Guid rhsId,
@@ -240,7 +271,7 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
         }
 
         // Create Intro classes for each time range.
-        return (new Intro(lhsId, lhsIntro), new Intro(rhsId, rhsIntro));
+        return (new Segment(lhsId, lhsIntro), new Segment(rhsId, rhsIntro));
     }
 
     /// <summary>
@@ -386,14 +417,14 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
     /// </summary>
     /// <param name="episodes">QueuedEpisodes to adjust.</param>
     /// <param name="originalIntros">Original introductions.</param>
-    private Dictionary<Guid, Intro> AdjustIntroEndTimes(
-        ReadOnlyCollection<QueuedEpisode> episodes,
-        Dictionary<Guid, Intro> originalIntros)
+    private Dictionary<Guid, Segment> AdjustIntroEndTimes(
+        ReadOnlyCollection<QueuedMedia> episodes,
+        Dictionary<Guid, Segment> originalIntros)
     {
         // The minimum duration of audio that must be silent before adjusting the intro's end.
         var minimumSilence = Plugin.Instance!.Configuration.SilenceDetectionMinimumDuration;
 
-        Dictionary<Guid, Intro> modifiedIntros = new();
+        Dictionary<Guid, Segment> modifiedIntros = new();
 
         // For all episodes
         foreach (var episode in episodes)
@@ -401,26 +432,26 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
             _logger.LogTrace(
                 "Adjusting introduction end time for {Name} ({Id})",
                 episode.Name,
-                episode.EpisodeId);
+                episode.ItemId);
 
             // If no intro was found for this episode, skip it.
-            if (!originalIntros.TryGetValue(episode.EpisodeId, out var originalIntro))
+            if (!originalIntros.TryGetValue(episode.ItemId, out var originalIntro))
             {
                 _logger.LogTrace("{Name} does not have an intro", episode.Name);
                 continue;
             }
 
             // Only adjust the end timestamp of the intro
-            var originalIntroEnd = new TimeRange(originalIntro.IntroEnd - 15, originalIntro.IntroEnd);
+            var originalIntroEnd = new TimeRange(originalIntro.End - 15, originalIntro.End);
 
             _logger.LogTrace(
                 "{Name} original intro: {Start} - {End}",
                 episode.Name,
-                originalIntro.IntroStart,
-                originalIntro.IntroEnd);
+                originalIntro.Start,
+                originalIntro.End);
 
             // Detect silence in the media file up to the end of the intro.
-            var silence = FFmpegWrapper.DetectSilence(episode, (int)originalIntro.IntroEnd + 2);
+            var silence = FFmpegWrapper.DetectSilence(episode, (int)originalIntro.End + 2);
 
             // For all periods of silence
             foreach (var currentRange in silence)
@@ -438,24 +469,24 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
                 if (
                     !originalIntroEnd.Intersects(currentRange) ||
                     currentRange.Duration < silenceDetectionMinimumDuration ||
-                    currentRange.Start < originalIntro.IntroStart)
+                    currentRange.Start < originalIntro.Start)
                 {
                     continue;
                 }
 
                 // Adjust the end timestamp of the intro to match the start of the silence region.
-                originalIntro.IntroEnd = currentRange.Start;
+                originalIntro.End = currentRange.Start;
                 break;
             }
 
             _logger.LogTrace(
                 "{Name} adjusted intro: {Start} - {End}",
                 episode.Name,
-                originalIntro.IntroStart,
-                originalIntro.IntroEnd);
+                originalIntro.Start,
+                originalIntro.End);
 
             // Add the (potentially) modified intro back.
-            modifiedIntros[episode.EpisodeId] = originalIntro;
+            modifiedIntros[episode.ItemId] = originalIntro;
         }
 
         return modifiedIntros;

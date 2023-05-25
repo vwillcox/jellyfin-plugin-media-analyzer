@@ -110,7 +110,7 @@ public static class FFmpegWrapper
     /// <param name="episode">Queued episode to fingerprint.</param>
     /// <param name="mode">Portion of media file to fingerprint. Introduction = first 25% / 10 minutes and Credits = last 4 minutes.</param>
     /// <returns>Numerical fingerprint points.</returns>
-    public static uint[] Fingerprint(QueuedEpisode episode, AnalysisMode mode)
+    public static uint[] Fingerprint(QueuedMedia episode, AnalysisMode mode)
     {
         int start, end;
 
@@ -173,13 +173,13 @@ public static class FFmpegWrapper
     /// <param name="episode">Queued episode.</param>
     /// <param name="limit">Maximum amount of audio (in seconds) to detect silence in.</param>
     /// <returns>Array of TimeRange objects that are silent in the queued episode.</returns>
-    public static TimeRange[] DetectSilence(QueuedEpisode episode, int limit)
+    public static TimeRange[] DetectSilence(QueuedMedia episode, int limit)
     {
         Logger?.LogTrace(
             "Detecting silence in \"{File}\" (limit {Limit}, id {Id})",
             episode.Path,
             limit,
-            episode.EpisodeId);
+            episode.ItemId);
 
         // -vn, -sn, -dn: ignore video, subtitle, and data tracks
         var args = string.Format(
@@ -191,7 +191,7 @@ public static class FFmpegWrapper
             Plugin.Instance?.Configuration.SilenceDetectionMaximumNoise ?? -50);
 
         // Cache the output of this command to "GUID-intro-silence-v1"
-        var cacheKey = episode.EpisodeId.ToString("N") + "-intro-silence-v1";
+        var cacheKey = episode.ItemId.ToString("N") + "-intro-silence-v1";
 
         var currentRange = new TimeRange();
         var silenceRanges = new List<TimeRange>();
@@ -230,7 +230,7 @@ public static class FFmpegWrapper
     /// <param name="minimum">Percentage of the frame that must be black.</param>
     /// <returns>Array of frames that are mostly black.</returns>
     public static BlackFrame[] DetectBlackFrames(
-        QueuedEpisode episode,
+        QueuedMedia episode,
         TimeRange range,
         int minimum)
     {
@@ -246,7 +246,7 @@ public static class FFmpegWrapper
         var cacheKey = string.Format(
             CultureInfo.InvariantCulture,
             "{0}-blackframes-{1}-{2}-v1",
-            episode.EpisodeId.ToString("N"),
+            episode.ItemId.ToString("N"),
             range.Start,
             range.End);
 
@@ -460,7 +460,7 @@ public static class FFmpegWrapper
     /// <param name="start">Time (in seconds) relative to the start of the file to start fingerprinting from.</param>
     /// <param name="end">Time (in seconds) relative to the start of the file to stop fingerprinting at.</param>
     /// <returns>Numerical fingerprint points.</returns>
-    private static uint[] Fingerprint(QueuedEpisode episode, AnalysisMode mode, int start, int end)
+    private static uint[] Fingerprint(QueuedMedia episode, AnalysisMode mode, int start, int end)
     {
         // Try to load this episode from cache before running ffmpeg.
         if (LoadCachedFingerprint(episode, mode, out uint[] cachedFingerprint))
@@ -474,7 +474,7 @@ public static class FFmpegWrapper
             start,
             end,
             episode.Path,
-            episode.EpisodeId);
+            episode.ItemId);
 
         var args = string.Format(
             CultureInfo.InvariantCulture,
@@ -513,7 +513,7 @@ public static class FFmpegWrapper
     /// <param name="fingerprint">Array to store the fingerprint in.</param>
     /// <returns>true if the episode was successfully loaded from cache, false on any other error.</returns>
     private static bool LoadCachedFingerprint(
-        QueuedEpisode episode,
+        QueuedMedia episode,
         AnalysisMode mode,
         out uint[] fingerprint)
     {
@@ -552,7 +552,7 @@ public static class FFmpegWrapper
             Logger?.LogDebug(
                 "Cached fingerprint for {Path} ({Id}) is corrupt, ignoring cache",
                 episode.Path,
-                episode.EpisodeId);
+                episode.ItemId);
 
             return false;
         }
@@ -569,7 +569,7 @@ public static class FFmpegWrapper
     /// <param name="mode">Analysis mode.</param>
     /// <param name="fingerprint">Fingerprint of the episode to store.</param>
     private static void CacheFingerprint(
-        QueuedEpisode episode,
+        QueuedMedia episode,
         AnalysisMode mode,
         List<uint> fingerprint)
     {
@@ -599,11 +599,11 @@ public static class FFmpegWrapper
     /// </summary>
     /// <param name="episode">Episode.</param>
     /// <param name="mode">Analysis mode.</param>
-    private static string GetFingerprintCachePath(QueuedEpisode episode, AnalysisMode mode)
+    private static string GetFingerprintCachePath(QueuedMedia episode, AnalysisMode mode)
     {
         var basePath = Path.Join(
             Plugin.Instance!.FingerprintCachePath,
-            episode.EpisodeId.ToString("N"));
+            episode.ItemId.ToString("N"));
 
         if (mode == AnalysisMode.Introduction)
         {

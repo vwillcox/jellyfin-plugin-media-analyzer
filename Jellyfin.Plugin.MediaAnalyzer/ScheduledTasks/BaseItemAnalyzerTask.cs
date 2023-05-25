@@ -2,6 +2,7 @@ namespace Jellyfin.Plugin.MediaAnalyzer;
 
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Library;
@@ -50,7 +51,8 @@ public class BaseItemAnalyzerTask
     {
         var queueManager = new QueueManager(
             _loggerFactory.CreateLogger<QueueManager>(),
-            _libraryManager);
+            _libraryManager,
+            _analysisMode);
 
         var queue = queueManager.GetMediaItems();
 
@@ -63,7 +65,7 @@ public class BaseItemAnalyzerTask
         if (totalQueued == 0)
         {
             throw new FingerprintException(
-                "No episodes to analyze. If you are limiting the list of libraries to analyze, check that all library names have been spelled correctly.");
+                "No movies/episodes to analyze. If you are limiting the list of libraries to analyze, check that all library names have been spelled correctly.");
         }
 
         var totalProcessed = 0;
@@ -89,10 +91,21 @@ public class BaseItemAnalyzerTask
 
             if (!unanalyzed)
             {
-                _logger.LogDebug(
-                    "All episodes in {Name} season {Season} have already been analyzed",
-                    first.SeriesName,
-                    first.SeasonNumber);
+                if (first.IsEpisode)
+                {
+                    _logger.LogDebug(
+                        "All episodes in {Name} season {Season} have already been analyzed for {AnalyzeType}",
+                        first.SeriesName,
+                        first.SeasonNumber,
+                        this._analysisMode);
+                }
+                else
+                {
+                    _logger.LogDebug(
+                        "Movie {Name} have already been analyzed for {AnalyzeType}",
+                        first.Name,
+                        this._analysisMode);
+                }
 
                 return;
             }
@@ -109,11 +122,21 @@ public class BaseItemAnalyzerTask
             }
             catch (FingerprintException ex)
             {
-                _logger.LogWarning(
-                    "Unable to analyze {Series} season {Season}: unable to fingerprint: {Ex}",
-                    first.SeriesName,
-                    first.SeasonNumber,
-                    ex);
+                if (first.IsEpisode)
+                {
+                    _logger.LogWarning(
+                        "Unable to analyze {Series} season {Season}: unable to fingerprint: {Ex}",
+                        first.SeriesName,
+                        first.SeasonNumber,
+                        ex);
+                }
+                else
+                {
+                    _logger.LogDebug(
+                        "Unable to analyze Movie {Name}: unable to fingerprint: {Ex}",
+                        first.Name,
+                        ex);
+                }
             }
 
             progress.Report((totalProcessed * 100) / totalQueued);
@@ -127,28 +150,44 @@ public class BaseItemAnalyzerTask
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of items that were successfully analyzed.</returns>
     private int AnalyzeItems(
-        ReadOnlyCollection<QueuedEpisode> items,
+        ReadOnlyCollection<QueuedMedia> items,
         CancellationToken cancellationToken)
     {
         var totalItems = items.Count;
-
-        // Only analyze specials (season 0) if the user has opted in.
         var first = items[0];
-        if (first.SeasonNumber == 0 && !Plugin.Instance!.Configuration.AnalyzeSeasonZero)
-        {
-            return 0;
-        }
 
-        _logger.LogInformation(
-            "Analyzing {Count} files from {Name} season {Season}",
-            items.Count,
-            first.SeriesName,
-            first.SeasonNumber);
+        if (first.IsEpisode)
+        {
+            // Only analyze specials (season 0) if the user has opted in.
+            if (first.SeasonNumber == 0 && !Plugin.Instance!.Configuration.AnalyzeSeasonZero)
+            {
+                return 0;
+            }
+
+            _logger.LogInformation(
+                "Analyzing {Count} files from {Name} season {Season}",
+                items.Count,
+                first.SeriesName,
+                first.SeasonNumber);
+        }
+        else
+        {
+            // we ignore movies intro run
+            if (this._analysisMode == AnalysisMode.Credits)
+            {
+                _logger.LogInformation("Analyzing Movie {Name}", first.Name);
+            }
+        }
 
         var analyzers = new Collection<IMediaFileAnalyzer>();
 
         analyzers.Add(new ChapterAnalyzer(_loggerFactory.CreateLogger<ChapterAnalyzer>()));
-        analyzers.Add(new ChromaprintAnalyzer(_loggerFactory.CreateLogger<ChromaprintAnalyzer>()));
+
+        // Movies don't use chromparint analyzer
+        if (first.IsEpisode)
+        {
+            analyzers.Add(new ChromaprintAnalyzer(_loggerFactory.CreateLogger<ChromaprintAnalyzer>()));
+        }
 
         if (this._analysisMode == AnalysisMode.Credits)
         {
@@ -160,6 +199,14 @@ public class BaseItemAnalyzerTask
         foreach (var analyzer in analyzers)
         {
             items = analyzer.AnalyzeMediaFiles(items, this._analysisMode, cancellationToken);
+        }
+
+        // Unanalyzed items should be blacklisted
+        var blacklisted = items.Where(i => !i.SkipBlacklist).ToList();
+
+        if (blacklisted.Count > 0 && Plugin.Instance!.Configuration.EnableBlacklist)
+        {
+            Plugin.Instance!.SaveBlacklist(blacklisted, this._analysisMode);
         }
 
         return totalItems;

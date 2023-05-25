@@ -91,7 +91,7 @@ public class VisualizationController : ControllerBase
 
         foreach (var e in episodes)
         {
-            visualEpisodes.Add(new EpisodeVisualization(e.EpisodeId, e.Name));
+            visualEpisodes.Add(new EpisodeVisualization(e.ItemId, e.Name));
         }
 
         return visualEpisodes;
@@ -110,7 +110,7 @@ public class VisualizationController : ControllerBase
         {
             foreach (var needle in season.Value)
             {
-                if (needle.EpisodeId == id)
+                if (needle.ItemId == id)
                 {
                     return FFmpegWrapper.Fingerprint(needle, AnalysisMode.Introduction);
                 }
@@ -120,51 +120,7 @@ public class VisualizationController : ControllerBase
         return NotFound();
     }
 
-    /// <summary>
-    /// Erases all timestamps for the provided season.
-    /// </summary>
-    /// <param name="series">Show name.</param>
-    /// <param name="season">Season name.</param>
-    /// <response code="204">Season timestamps erased.</response>
-    /// <response code="404">Unable to find season in provided series.</response>
-    /// <returns>No content.</returns>
-    [HttpDelete("Show/{Series}/{Season}")]
-    public async Task<ActionResult> EraseSeason([FromRoute] string series, [FromRoute] string season)
-    {
-        if (!LookupSeasonByName(series, season, out var episodes))
-        {
-            return NotFound();
-        }
-
-        _logger.LogInformation("Erasing timestamps from cache for {Series} {Season} at user request", series, season);
-
-        foreach (var e in episodes)
-        {
-            Plugin.Instance!.Intros.Remove(e.EpisodeId);
-            await Plugin.Instance!.RemoveSegment(e.EpisodeId).ConfigureAwait(false);
-        }
-
-        return NoContent();
-    }
-
-    /// <summary>
-    /// Updates the timestamps for the provided episode.
-    /// </summary>
-    /// <param name="id">Episode ID to update timestamps for.</param>
-    /// <param name="timestamps">New introduction start and end times.</param>
-    /// <response code="204">New introduction timestamps saved.</response>
-    /// <returns>No content.</returns>
-    [HttpPost("Episode/{Id}/UpdateIntroTimestamps")]
-    public async Task<ActionResult> UpdateTimestamps([FromRoute] Guid id, [FromBody] Intro timestamps)
-    {
-        var tr = new TimeRange(timestamps.IntroStart, timestamps.IntroEnd);
-        Plugin.Instance!.Intros[id] = new Intro(id, tr);
-        await Plugin.Instance!.SaveSegments().ConfigureAwait(false);
-
-        return NoContent();
-    }
-
-    private string GetSeasonName(QueuedEpisode episode)
+    private string GetSeasonName(QueuedMedia episode)
     {
         return "Season " + episode.SeasonNumber.ToString(CultureInfo.InvariantCulture);
     }
@@ -176,7 +132,7 @@ public class VisualizationController : ControllerBase
     /// <param name="season">Season name.</param>
     /// <param name="episodes">Episodes.</param>
     /// <returns>Boolean indicating if the requested season was found.</returns>
-    private bool LookupSeasonByName(string series, string season, out List<QueuedEpisode> episodes)
+    private bool LookupSeasonByName(string series, string season, out List<QueuedMedia> episodes)
     {
         foreach (var queuedEpisodes in Plugin.Instance!.QueuedMediaItems)
         {
@@ -195,7 +151,7 @@ public class VisualizationController : ControllerBase
             return true;
         }
 
-        episodes = new List<QueuedEpisode>();
+        episodes = new List<QueuedMedia>();
         return false;
     }
 }

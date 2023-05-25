@@ -97,18 +97,18 @@ public class TestAudioFingerprinting
         var rhsFingerprint = FFmpegWrapper.Fingerprint(rhsEpisode, AnalysisMode.Introduction);
 
         var (lhs, rhs) = chromaprint.CompareEpisodes(
-            lhsEpisode.EpisodeId,
+            lhsEpisode.ItemId,
             lhsFingerprint,
-            rhsEpisode.EpisodeId,
+            rhsEpisode.ItemId,
             rhsFingerprint);
 
         Assert.True(lhs.Valid);
-        Assert.Equal(0, lhs.IntroStart);
-        Assert.Equal(17.792, lhs.IntroEnd);
+        Assert.Equal(0, lhs.Start);
+        Assert.Equal(17.792, lhs.End);
 
         Assert.True(rhs.Valid);
-        Assert.Equal(5.12, rhs.IntroStart);
-        Assert.Equal(22.912, rhs.IntroEnd);
+        Assert.Equal(5.12, rhs.Start);
+        Assert.Equal(22.912, rhs.End);
     }
 
     /// <summary>
@@ -134,11 +134,11 @@ public class TestAudioFingerprinting
         Assert.Equal(expected, actual);
     }
 
-    private QueuedEpisode queueEpisode(string path)
+    private QueuedMedia queueEpisode(string path)
     {
-        return new QueuedEpisode()
+        return new QueuedMedia()
         {
-            EpisodeId = Guid.NewGuid(),
+            ItemId = Guid.NewGuid(),
             Path = "../../../" + path,
             IntroFingerprintEnd = 60
         };

@@ -39,14 +39,14 @@ public class TestBlackFrames
 
         var result = analyzer.AnalyzeMediaFile(episode, AnalysisMode.Credits, 85);
         Assert.NotNull(result);
-        Assert.InRange(result.IntroStart, 300 - range, 300 + range);
+        Assert.InRange(result.Start, 300 - range, 300 + range);
     }
 
-    private QueuedEpisode queueFile(string path)
+    private QueuedMedia queueFile(string path)
     {
         return new()
         {
-            EpisodeId = Guid.NewGuid(),
+            ItemId = Guid.NewGuid(),
             Name = path,
             Path = "../../../video/" + path
         };

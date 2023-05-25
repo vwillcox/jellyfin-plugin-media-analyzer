@@ -28,12 +28,27 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public MediaSegmentAction SeriesOutroAction { get; set; } = MediaSegmentAction.Auto;
 
+    /// <summary>
+    /// Gets or sets a the recommended action for movies outro segments.
+    /// </summary>
+    public MediaSegmentAction MoviesOutroAction { get; set; } = MediaSegmentAction.Auto;
+
     // ===== Analysis settings =====
 
     /// <summary>
     /// Gets or sets a value indicating whether the episode's fingerprint should be cached to the filesystem.
     /// </summary>
-    public bool CacheFingerprints { get; set; } = true;
+    public bool CacheFingerprints { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Blacklist should be resetted.
+    /// </summary>
+    public bool ResetBlacklist { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Blacklist should be created or used.
+    /// </summary>
+    public bool EnableBlacklist { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the max degree of parallelism used when analyzing episodes.
@@ -49,6 +64,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the comma separated list of tv shows and seasons to skip the analyze. Format: "My Show;S01;S02, Another Show".
     /// </summary>
     public string SkippedTvShows { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the comma separated list of movies to skip the analyze.".
+    /// </summary>
+    public string SkippedMovies { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets a value indicating whether to analyze season 0.
@@ -88,6 +108,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaximumEpisodeCreditsDuration { get; set; } = 240;
 
     /// <summary>
+    /// Gets or sets the upper limit (in seconds) on the length of each movie's audio track that will be analyzed when searching for ending credits.
+    /// </summary>
+    public int MaximumMovieCreditsDuration { get; set; } = 900;
+
+    /// <summary>
     /// Gets or sets the minimum percentage of a frame that must consist of black pixels before it is considered a black frame.
     /// </summary>
     public int BlackFrameMinimumPercentage { get; set; } = 85;
@@ -102,7 +127,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the regular expression used to detect ending credit chapters.
     /// </summary>
     public string ChapterAnalyzerEndCreditsPattern { get; set; } =
-        @"(^|\s)(Credits?|Ending)(\s|$)";
+        @"(^|\s)(Credits?|Ending|End|Outro)(\s|$)";
 
     // ===== Internal algorithm settings =====
 

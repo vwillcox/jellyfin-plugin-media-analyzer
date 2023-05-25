@@ -14,3 +14,4 @@
   * Add support for multiple analysis techinques
 * Breaking Change
   * Removed all server and frontend influencing mods
+  * Removed EDL handling

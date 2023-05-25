@@ -9,21 +9,20 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.MediaAnalyzer;
 
 /// <summary>
-/// Analyze all television episodes for credits.
-/// TODO: analyze all media files.
+/// Analyze all television episodes for introduction sequences.
 /// </summary>
-public class DetectCreditsTask : IScheduledTask
+public class AnalyzeMedia : IScheduledTask
 {
     private readonly ILoggerFactory _loggerFactory;
 
     private readonly ILibraryManager _libraryManager;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="DetectCreditsTask"/> class.
+    /// Initializes a new instance of the <see cref="AnalyzeMedia"/> class.
     /// </summary>
     /// <param name="loggerFactory">Logger factory.</param>
     /// <param name="libraryManager">Library manager.</param>
-    public DetectCreditsTask(
+    public AnalyzeMedia(
         ILoggerFactory loggerFactory,
         ILibraryManager libraryManager)
     {
@@ -34,7 +33,7 @@ public class DetectCreditsTask : IScheduledTask
     /// <summary>
     /// Gets the task name.
     /// </summary>
-    public string Name => "Detect Credits";
+    public string Name => "Analyze Media";
 
     /// <summary>
     /// Gets the task category.
@@ -44,12 +43,12 @@ public class DetectCreditsTask : IScheduledTask
     /// <summary>
     /// Gets the task description.
     /// </summary>
-    public string Description => "Analyzes the audio and video of all television episodes to find credits.";
+    public string Description => "Analyzes the audio of all television episodes to find introduction and credits sequences.";
 
     /// <summary>
     /// Gets the task key.
     /// </summary>
-    public string Key => "JFPMediaAnalyzerDetectCredits";
+    public string Key => "JFPMediaAnalyzerAnalyzeMedia";
 
     /// <summary>
     /// Analyze all episodes in the queue. Only one instance of this task should be run at a time.
@@ -64,13 +63,32 @@ public class DetectCreditsTask : IScheduledTask
             throw new InvalidOperationException("Library manager was null");
         }
 
-        var baseAnalyzer = new BaseItemAnalyzerTask(
-            AnalysisMode.Credits,
-            _loggerFactory.CreateLogger<DetectCreditsTask>(),
+        // load blacklist
+        Plugin.Instance!.GetBlacklistFromDb();
+
+        // intro
+        var introBaseAnalyzer = new BaseItemAnalyzerTask(
+            AnalysisMode.Introduction,
+            _loggerFactory.CreateLogger<AnalyzeMedia>(),
             _loggerFactory,
             _libraryManager);
 
-        baseAnalyzer.AnalyzeItems(progress, cancellationToken);
+        introBaseAnalyzer.AnalyzeItems(progress, cancellationToken);
+
+        // reset progress
+        progress.Report(0);
+
+        // outro
+        var outroBaseAnalyzer = new BaseItemAnalyzerTask(
+            AnalysisMode.Credits,
+            _loggerFactory.CreateLogger<AnalyzeMedia>(),
+            _loggerFactory,
+            _libraryManager);
+
+        outroBaseAnalyzer.AnalyzeItems(progress, cancellationToken);
+
+        // reset blacklist
+        Plugin.Instance!.Blacklist.Clear();
 
         return Task.CompletedTask;
     }
@@ -86,7 +104,7 @@ public class DetectCreditsTask : IScheduledTask
             new TaskTriggerInfo
             {
                 Type = TaskTriggerInfo.TriggerDaily,
-                TimeOfDayTicks = TimeSpan.FromHours(1).Ticks
+                TimeOfDayTicks = TimeSpan.FromHours(0).Ticks
             }
         };
     }
