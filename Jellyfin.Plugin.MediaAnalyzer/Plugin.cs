@@ -68,7 +68,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Blacklist = new List<BlacklistSegment>();
 
         _pluginCachePath = Path.Join(applicationPaths.CachePath, "JFPMediaAnalyzer");
-        _pluginDbPath = Path.Join(_pluginCachePath, "jfpmediaanalyzer.db");
+        _pluginDbPath = Path.Join(_pluginCachePath, "mediaanalyzer.db");
 
         FingerprintCachePath = Path.Join(_pluginCachePath, "chromaprints");
 
@@ -79,11 +79,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
 
         // Create and migrate db
-        // using var db = new MediaAnalyzerDbContext(this._pluginDbPath);
-        // db.ApplyMigrations();
+        using (var context = new MediaAnalyzerDbContext(this._pluginDbPath))
+        {
+            context.ApplyMigrations();
+        }
 
         ConfigurationChanged += OnConfigurationChanged;
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether analysis is running.
+    /// </summary>
+    public bool AnalysisRunning { get; set; } = false;
 
     /// <summary>
     /// Gets the most recent media item queue.
@@ -122,7 +129,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public ICollection<BlacklistSegment> Blacklist { get; private set; }
 
     /// <summary>
-    /// Delete segments from.
+    /// Delete segments from db.
     /// </summary>
     /// <param name="type">Type of Media segment.</param>
     /// <returns>Task.</returns>
@@ -141,6 +148,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _logger.LogDebug("Delete Segments for itemId: {Item}", itemId);
 
         await _mediaSegmentsManager.DeleteSegmentsAsync(creatorId: Id, itemId: itemId).ConfigureAwait(false);
+        DeleteBlacklist(itemId);
     }
 
     /// <summary>
@@ -283,11 +291,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <summary>
-    /// Save blacklisted segments to disk.
+    /// Update blacklist cache.
     /// </summary>
     /// <param name="media">Media to blacklist.</param>
     /// <param name="mode">analysis mode.</param>
-    public void SaveBlacklist(ICollection<QueuedMedia> media, AnalysisMode mode)
+    public void UpdateBlacklist(ICollection<QueuedMedia> media, AnalysisMode mode)
     {
         lock (_serializationLock)
         {
@@ -297,13 +305,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             foreach (var seg in media)
             {
                 var segName = seg.IsEpisode ? string.Format(CultureInfo.InvariantCulture, "{0} S{1}: {2}", seg.SeriesName, seg.SeasonNumber, seg.Name) : string.Format(CultureInfo.InvariantCulture, "{0}", seg.Name);
+                var type = mode == AnalysisMode.Introduction ? MediaSegmentType.Intro : MediaSegmentType.Outro;
                 var s = new BlacklistSegment
                 {
                     ItemId = seg.ItemId,
-                    Type = mode == AnalysisMode.Introduction ? MediaSegmentType.Intro : MediaSegmentType.Outro,
+                    Type = type,
                     Name = segName,
                 };
-                _logger.LogDebug("Blacklisting: {Name}", segName);
+                _logger.LogInformation("Blacklisting: '{Name}' for Segment type '{Type}'", segName, type);
                 newBlackList.Add(s);
             }
 
@@ -315,24 +324,42 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     this.Blacklist.Add(seg);
                 }
             }
-
-            // update db
-            // using var db = new MediaAnalyzerDbContext(this._pluginCachePath);
-            // db.SaveChanges();
         }
     }
 
     /// <summary>
-    /// Delete Blacklist database.
+    /// Save blacklisted segments to db.
     /// </summary>
-    public void DeleteBlacklist()
+    public void SaveBlacklist()
     {
-        /*
-        using var db = new MediaAnalyzerDbContext(this._pluginCachePath);
-        var delete = db.BlacklistSegment.ToList();
-        db.RemoveRange(delete);
-        db.SaveChanges();
-        */
+        // update db
+        using (var context = new MediaAnalyzerDbContext(this._pluginDbPath))
+        {
+            var storedBlacklist = context.BlacklistSegment.ToList();
+            foreach (var seg in this.Blacklist)
+            {
+                if (!storedBlacklist.Contains(seg))
+                {
+                    context.BlacklistSegment.Add(seg);
+                }
+            }
+
+            context.SaveChanges();
+        }
+    }
+
+    /// <summary>
+    /// Delete Blacklisted database entries.
+    /// </summary>
+    /// <param name="id">Optional just id.</param>
+    public void DeleteBlacklist(Guid? id)
+    {
+        using (var context = new MediaAnalyzerDbContext(this._pluginDbPath))
+        {
+            var delete = id is not null ? context.BlacklistSegment.Where(s => s.ItemId == id).ToList() : context.BlacklistSegment.ToList();
+            context.RemoveRange(delete);
+            context.SaveChanges();
+        }
     }
 
     /// <summary>
@@ -340,24 +367,24 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     public void GetBlacklistFromDb()
     {
-        /*
         if (this.Configuration.EnableBlacklist)
         {
-            using var db = new MediaAnalyzerDbContext(this._pluginCachePath);
-            this.Blacklist = db.BlacklistSegment.ToList();
+            using (var context = new MediaAnalyzerDbContext(this._pluginDbPath))
+            {
+                this.Blacklist = context.BlacklistSegment.ToList();
+            }
         }
         else
         {
             this.Blacklist.Clear();
         }
-        */
     }
 
     private void OnConfigurationChanged(object? sender, BasePluginConfiguration e)
     {
         if (this.Configuration.ResetBlacklist == true)
         {
-            this.DeleteBlacklist();
+            this.DeleteBlacklist(null);
             this.Configuration.ResetBlacklist = false;
             this.SaveConfiguration(this.Configuration);
         }

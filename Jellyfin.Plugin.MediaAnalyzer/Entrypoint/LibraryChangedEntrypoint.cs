@@ -6,6 +6,7 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.MediaAnalyzer;
@@ -16,24 +17,27 @@ namespace Jellyfin.Plugin.MediaAnalyzer;
 public class LibraryChangedEntrypoint : IServerEntryPoint
 {
     private readonly ILibraryManager _libraryManager;
+    private readonly ITaskManager _taskManager;
     private readonly ILogger<LibraryChangedEntrypoint> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private Timer _queueTimer;
-    private bool _analysisRunning;
     private bool _analyzeAgain;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LibraryChangedEntrypoint"/> class.
     /// </summary>
     /// <param name="libraryManager">Library manager.</param>
+    /// <param name="taskManager">Task manager.</param>
     /// <param name="logger">Logger.</param>
     /// <param name="loggerFactory">Logger factory.</param>
     public LibraryChangedEntrypoint(
         ILibraryManager libraryManager,
+        ITaskManager taskManager,
         ILogger<LibraryChangedEntrypoint> logger,
         ILoggerFactory loggerFactory)
     {
         _libraryManager = libraryManager;
+        _taskManager = taskManager;
         _logger = logger;
         _loggerFactory = loggerFactory;
 
@@ -50,9 +54,11 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// <returns>Task.</returns>
     public Task RunAsync()
     {
-        _libraryManager.ItemAdded += LibraryManagerItemAdded;
-        _libraryManager.ItemUpdated += LibraryManagerItemUpdated;
+        // _libraryManager.ItemAdded += LibraryManagerItemAdded;
+        // _libraryManager.ItemUpdated += LibraryManagerItemUpdated;
         _libraryManager.ItemRemoved += LibraryManagerItemRemoved;
+
+        _taskManager.TaskCompleted += TaskManagerTaskCompleted;
         FFmpegWrapper.Logger = _logger;
 
         return Task.CompletedTask;
@@ -102,6 +108,28 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     }
 
     /// <summary>
+    /// TaskManager task ended.
+    /// </summary>
+    /// <param name="sender">The sending entity.</param>
+    /// <param name="eventArgs">The <see cref="TaskCompletionEventArgs"/>.</param>
+    private void TaskManagerTaskCompleted(object? sender, TaskCompletionEventArgs eventArgs)
+    {
+        var result = eventArgs.Result;
+
+        if (result.Key != "RefreshLibrary")
+        {
+            return;
+        }
+
+        if (result.Status != TaskCompletionStatus.Completed)
+        {
+            return;
+        }
+
+        StartTimer();
+    }
+
+    /// <summary>
     /// Library item was updated.
     /// </summary>
     /// <param name="sender">The sending entity.</param>
@@ -127,15 +155,14 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// </summary>
     private void StartTimer()
     {
-        if (_analysisRunning)
+        if (Plugin.Instance!.AnalysisRunning)
         {
-            _logger.LogInformation("Analyize Again please!! We are already running an analyzer");
             _analyzeAgain = true;
         }
         else
         {
-            _logger.LogInformation("Nothing is running, start timer");
-            _queueTimer.Change(TimeSpan.FromMilliseconds(30000), Timeout.InfiniteTimeSpan);
+            _logger.LogInformation("Media Library changed, analysis will start soon!");
+            _queueTimer.Change(TimeSpan.FromMilliseconds(10000), Timeout.InfiniteTimeSpan);
         }
     }
 
@@ -159,8 +186,8 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// </summary>
     private void OnQueueTimerCallbackInternal()
     {
-        _logger.LogInformation("Timer elapsed - processing items");
-        _analysisRunning = true;
+        _logger.LogInformation("Timer elapsed - start analyzing");
+        Plugin.Instance!.AnalysisRunning = true;
         var progress = new Progress<double>();
         var cancellationToken = new CancellationToken(false);
 
@@ -185,15 +212,18 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
 
         outroBaseAnalyzer.AnalyzeItems(progress, cancellationToken);
 
+        // save blacklist to db
+        Plugin.Instance!.SaveBlacklist();
+
         // reset blacklist
         Plugin.Instance!.Blacklist.Clear();
 
-        _analysisRunning = false;
+        Plugin.Instance!.AnalysisRunning = false;
 
         // we might need to analyze again
         if (_analyzeAgain)
         {
-            _logger.LogInformation("Analyzing ended, but we should ananlyze again!");
+            _logger.LogInformation("Analyzing ended, but we need to analyze again!");
             _analyzeAgain = false;
             StartTimer();
         }
@@ -216,9 +246,11 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     {
         if (!dispose)
         {
-            _libraryManager.ItemAdded -= LibraryManagerItemAdded;
-            _libraryManager.ItemUpdated -= LibraryManagerItemUpdated;
+            // _libraryManager.ItemAdded -= LibraryManagerItemAdded;
+            // _libraryManager.ItemUpdated -= LibraryManagerItemUpdated;
             _libraryManager.ItemRemoved -= LibraryManagerItemRemoved;
+
+            _taskManager.TaskCompleted -= TaskManagerTaskCompleted;
 
             _queueTimer.Dispose();
 

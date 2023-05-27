@@ -64,8 +64,7 @@ public class BaseItemAnalyzerTask
 
         if (totalQueued == 0)
         {
-            throw new FingerprintException(
-                "No movies/episodes to analyze. If you are limiting the list of libraries to analyze, check that all library names have been spelled correctly.");
+            return;
         }
 
         var totalProcessed = 0;
@@ -206,7 +205,7 @@ public class BaseItemAnalyzerTask
 
         if (blacklisted.Count > 0 && Plugin.Instance!.Configuration.EnableBlacklist)
         {
-            Plugin.Instance!.SaveBlacklist(blacklisted, this._analysisMode);
+            Plugin.Instance!.UpdateBlacklist(blacklisted, this._analysisMode);
         }
 
         return totalItems;

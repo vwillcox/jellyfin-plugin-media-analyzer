@@ -4,30 +4,16 @@
 
 With following changes
 
-- [x] Remove frontend/backend playback injection
-- [x] Remove plugin settings section for playback
-- [X] Update implementation to use Jellyfin Media Segment API
-- [x] Fix configPage.html updateTimestamps (update http endpoint required). Here just for intros?!
-- [x] Fix configPage.html delete segemts per type (deletes currently all)
+- [x] Enable Credits detection for episodes and movies (black frame analyzer)
+- [x] No cache option (default: enabled) -> no disk space required
+- [x] Auto ananlyze after media scanning task ended
+- [x] Filter for tv show names and optional season/s
+- [x] No server side playback influence or frontend script injection (clean!)
 - [x] Move .edl file creation into another [plugin](<https://github.com/endrl/jellyfin-plugin-edl>)
-- [x] Remove cached Intro/Outro
-- [x] Disable ffmpeg cache fingerprints by deafult
-- [x] Move the extended plugin page for segment edits to a dedicated plugin "Media Segment Editor"
-  - [ ] with additional meta support per plugin like "get chromaprints of plugin x"
+- [x] Move the extended plugin page for segment edits to a dedicated tool [Media Segment Editor](https://github.com/endrl/segment-editor)
+  - [ ] move additional meta support per plugin like "get chromaprints of plugin x"
 
-Note: Intro prompt is shown 5 seconds before (plugin default), netflex 2? seconds after. Probably use 2 seconds before as guideline? \
-Note: Intro prompt hide is 10 seconds after start. netflix is 8s in total? Probably use 7 seconds after as guideline?
-Note: SecondsOfIntroToPlay. Generic offset to prevent skipped content. Should be added to a segment? Or frontend? End-2s as Guideline? \
-Note: Show a notification when segment action "Skip", "Mute" is executed as hint?
-
-List of additional fixes
-
-- [25% or 10 minutes](https://github.com/ConfusedPolarBear/intro-skipper/issues/139) updated to 30% and 15 Minutes
-- Skip filter for tv show names and seasons
-- Enabled credits detection
-- Pending: <https://github.com/ConfusedPolarBear/intro-skipper/issues/115>
-
-Analyzes the audio of television episodes to detect intros.
+Analyzes the audio of television episodes to detect intros and cedits, for movies detect credits.
 
 ## System requirements
 
@@ -35,7 +21,7 @@ Analyzes the audio of television episodes to detect intros.
 - ATTENTION: The jellyfin-server needs a working [jellyfin-ffmpeg 5 or 6](https://github.com/jellyfin/jellyfin-ffmpeg/releases). If missing you need to download and provide a path to it through webconfig.
   - Now you can add your media libraries.
   - Reason: The duration of a media file is added during first scan and is unknown without ffmpeg!
-  - HotFix: Remove media libraries. Add ffmpeg. Add media libraries again. Run Plugin tasks again.
+  - HotFix: Remove media libraries. Add ffmpeg. Add media libraries again.
 
 ## Introduction requirements
 

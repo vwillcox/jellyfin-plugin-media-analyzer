@@ -63,6 +63,15 @@ public class AnalyzeMedia : IScheduledTask
             throw new InvalidOperationException("Library manager was null");
         }
 
+        if (Plugin.Instance!.AnalysisRunning)
+        {
+            return Task.CompletedTask;
+        }
+        else
+        {
+            Plugin.Instance!.AnalysisRunning = true;
+        }
+
         // load blacklist
         Plugin.Instance!.GetBlacklistFromDb();
 
@@ -87,8 +96,13 @@ public class AnalyzeMedia : IScheduledTask
 
         outroBaseAnalyzer.AnalyzeItems(progress, cancellationToken);
 
+        // save blacklist to db
+        Plugin.Instance!.SaveBlacklist();
+
         // reset blacklist
         Plugin.Instance!.Blacklist.Clear();
+
+        Plugin.Instance!.AnalysisRunning = false;
 
         return Task.CompletedTask;
     }
