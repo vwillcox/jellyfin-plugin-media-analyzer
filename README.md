@@ -4,9 +4,10 @@
 
 With following changes
 
+- [x] ONLY FOR Jellyfin Server with media segments api!
 - [x] Enable Credits detection for episodes and movies (black frame analyzer)
 - [x] No cache option (default: enabled) -> no disk space required
-- [x] Auto ananlyze after media scanning task ended
+- [x] Auto analyze after media scanning task ended
 - [x] Filter for tv show names and optional season/s
 - [x] No server side playback influence or frontend script injection (clean!)
 - [x] Move .edl file creation into another [plugin](<https://github.com/endrl/jellyfin-plugin-edl>)
@@ -39,7 +40,7 @@ All of these requirements can be customized as needed.
 1. Add plugin repository to your server: `https://raw.githubusercontent.com/endrl/jellyfin-plugin-repo/master/manifest.json`
 2. Install the Media Analyzer plugin from the General section
 3. Restart Jellyfin
-4. Go to Dashboard -> Scheduled Tasks -> Analyze Episodes and click the play button
+4. Go to Dashboard -> Scheduled Tasks -> Analyze Media and click the play button
 
 ### Debug Logging
 

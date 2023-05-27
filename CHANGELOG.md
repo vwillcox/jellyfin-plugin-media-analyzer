@@ -1,9 +1,17 @@
 # Changelog
 
 ## Unreleased
+
 * None
 
+## v0.2.0.0 (2023-05-28)
+
+* Blacklisting with db
+* Enable movies credits detection
+
 ## v0.1.0.0 (2023-05-04)
+
+* Outdated, removed from repository!
 * Initial release
 * New features
   * Detect ending credits in television episodes
