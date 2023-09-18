@@ -193,8 +193,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         {
             var seg = new MediaSegment()
             {
-                Start = value.Start,
-                End = value.End,
+                Start = Math.Round(value.Start, 2, MidpointRounding.AwayFromZero),
+                End = Math.Round(value.End, 2, MidpointRounding.AwayFromZero),
                 ItemId = value.ItemId,
                 CreatorId = this.Id,
                 Type = type,
