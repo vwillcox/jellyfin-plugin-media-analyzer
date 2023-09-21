@@ -194,12 +194,12 @@ public class ChromaprintAnalyzer : IMediaFileAnalyzer
 
         if (seasonSegments.Count != 0)
         {
-            _logger.LogDebug("Save {Count} segment/s", seasonSegments.Count);
+            _logger.LogInformation("Save {Count} segments", seasonSegments.Count);
             Plugin.Instance!.UpdateTimestamps(seasonSegments, this._analysisMode);
         }
         else
         {
-            _logger.LogDebug("No segments to save");
+            _logger.LogDebug("No segments found");
         }
 
         return episodesWithoutSegments.AsReadOnly();

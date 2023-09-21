@@ -68,7 +68,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Blacklist = new List<BlacklistSegment>();
 
         _pluginCachePath = Path.Join(applicationPaths.CachePath, "JFPMediaAnalyzer");
-        _pluginDbPath = Path.Join(_pluginCachePath, "mediaanalyzer.db");
+        _pluginDbPath = Path.Join(applicationPaths.PluginConfigurationsPath, "mediaanalyzer.db");
 
         FingerprintCachePath = Path.Join(_pluginCachePath, "chromaprints");
 
@@ -312,7 +312,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     Type = type,
                     Name = segName,
                 };
-                _logger.LogInformation("Blacklisting: '{Name}' for Segment type '{Type}'", segName, type);
+
+                _logger.LogInformation("No '{Type}' segment found for '{Name}', blacklist for future analysis", type, segName);
+
                 newBlackList.Add(s);
             }
 

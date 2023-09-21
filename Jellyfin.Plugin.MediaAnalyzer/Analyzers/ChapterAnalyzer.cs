@@ -66,12 +66,12 @@ public class ChapterAnalyzer : IMediaFileAnalyzer
 
         if (skippableRanges.Count != 0)
         {
-            _logger.LogDebug("Save {Count} segment/s", skippableRanges.Count);
+            _logger.LogInformation("Save {Count} segments", skippableRanges.Count);
             Plugin.Instance!.UpdateTimestamps(skippableRanges, mode);
         }
         else
         {
-            _logger.LogDebug("No segments to save");
+            _logger.LogDebug("No segments found");
         }
 
         return analysisQueue

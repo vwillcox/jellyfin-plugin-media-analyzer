@@ -57,6 +57,25 @@
                                 </div>
                             </div>
 
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="RunAfterLibraryScan" type="checkbox" is="emby-checkbox" />
+                                    <span>Run after Library Scan</span>
+                                </label>
+
+                                <div class="fieldDescription">Whenever the media library scan task ends, run the analyzer.</div>
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="RunAfterAddOrUpdateEvent" type="checkbox" is="emby-checkbox" />
+                                    <span>Run after Library update events</span>
+                                </label>
+
+                                <div class="fieldDescription">When media folder watch is enabled the library will push events we can also listen for.</div>
+
+                            </div>
+
                             <legend>Analysis</legend>
 
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -345,7 +364,7 @@
                     "SilenceDetectionMinimumDuration",
                 ];
 
-                var booleanConfigurationFields = ["AnalyzeSeasonZero","CacheFingerprints","ResetBlacklist","EnableBlacklist"];
+                var booleanConfigurationFields = ["AnalyzeSeasonZero","RunAfterLibraryScan","RunAfterAddOrUpdateEvent","CacheFingerprints","ResetBlacklist","EnableBlacklist"];
 
                 // visualizer elements
                 var canvas = document.querySelector("canvas#troubleshooter");

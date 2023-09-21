@@ -54,10 +54,9 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// <returns>Task.</returns>
     public Task RunAsync()
     {
-        // _libraryManager.ItemAdded += LibraryManagerItemAdded;
-        // _libraryManager.ItemUpdated += LibraryManagerItemUpdated;
+        _libraryManager.ItemAdded += LibraryManagerItemAdded;
+        _libraryManager.ItemUpdated += LibraryManagerItemUpdated;
         _libraryManager.ItemRemoved += LibraryManagerItemRemoved;
-
         _taskManager.TaskCompleted += TaskManagerTaskCompleted;
         FFmpegWrapper.Logger = _logger;
 
@@ -65,7 +64,7 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     }
 
     /// <summary>
-    /// Library item was removed.
+    /// Delete blacklisted segments for itemid when library removed it.
     /// </summary>
     /// <param name="sender">The sending entity.</param>
     /// <param name="itemChangeEventArgs">The <see cref="ItemChangeEventArgs"/>.</param>
@@ -81,9 +80,7 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
             return;
         }
 
-        // delete segments
-        var task = Task.Run(async () => { await Plugin.Instance!.DeleteSegementsById(itemChangeEventArgs.Item.Id).ConfigureAwait(false); });
-        task.Wait();
+        Plugin.Instance!.DeleteBlacklist(itemChangeEventArgs.Item.Id);
     }
 
     /// <summary>
@@ -93,6 +90,11 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// <param name="itemChangeEventArgs">The <see cref="ItemChangeEventArgs"/>.</param>
     private void LibraryManagerItemAdded(object? sender, ItemChangeEventArgs itemChangeEventArgs)
     {
+        if (!Plugin.Instance!.Configuration.RunAfterAddOrUpdateEvent)
+        {
+            return;
+        }
+
         // Don't do anything if it's not a supported media type
         if (itemChangeEventArgs.Item is not Movie and not Episode)
         {
@@ -116,6 +118,11 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     {
         var result = eventArgs.Result;
 
+        if (!Plugin.Instance!.Configuration.RunAfterLibraryScan)
+        {
+            return;
+        }
+
         if (result.Key != "RefreshLibrary")
         {
             return;
@@ -136,6 +143,12 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// <param name="itemChangeEventArgs">The <see cref="ItemChangeEventArgs"/>.</param>
     private void LibraryManagerItemUpdated(object? sender, ItemChangeEventArgs itemChangeEventArgs)
     {
+
+        if (!Plugin.Instance!.Configuration.RunAfterAddOrUpdateEvent)
+        {
+            return;
+        }
+
         // Don't do anything if it's not a supported media type
         if (itemChangeEventArgs.Item is not Movie and not Episode)
         {
@@ -161,8 +174,8 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
         }
         else
         {
-            _logger.LogInformation("Media Library changed, analysis will start soon!");
-            _queueTimer.Change(TimeSpan.FromMilliseconds(10000), Timeout.InfiniteTimeSpan);
+            _logger.LogInformation("Media Library changed, analyzis will start soon!");
+            _queueTimer.Change(TimeSpan.FromMilliseconds(15000), Timeout.InfiniteTimeSpan);
         }
     }
 
@@ -246,8 +259,8 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     {
         if (!dispose)
         {
-            // _libraryManager.ItemAdded -= LibraryManagerItemAdded;
-            // _libraryManager.ItemUpdated -= LibraryManagerItemUpdated;
+            _libraryManager.ItemAdded -= LibraryManagerItemAdded;
+            _libraryManager.ItemUpdated -= LibraryManagerItemUpdated;
             _libraryManager.ItemRemoved -= LibraryManagerItemRemoved;
 
             _taskManager.TaskCompleted -= TaskManagerTaskCompleted;

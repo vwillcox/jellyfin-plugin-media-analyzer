@@ -33,6 +33,16 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public MediaSegmentAction MoviesOutroAction { get; set; } = MediaSegmentAction.Auto;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether we run after a library scan.
+    /// </summary>
+    public bool RunAfterLibraryScan { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether we run after library item added or updated events.
+    /// </summary>
+    public bool RunAfterAddOrUpdateEvent { get; set; } = true;
+
     // ===== Analysis settings =====
 
     /// <summary>

@@ -12,5 +12,6 @@
     "jellyfinDataDir": "${env:LOCALAPPDATA}/jellyfin",
     "jellyfinDataDirWin": "${env:LOCALAPPDATA}\\jellyfin",
     // The name of the plugin
-    "pluginName": "Jellyfin.Plugin.MediaAnalyzer"
+    "pluginName": "Jellyfin.Plugin.MediaAnalyzer",
+    "cmake.configureOnOpen": false
 }

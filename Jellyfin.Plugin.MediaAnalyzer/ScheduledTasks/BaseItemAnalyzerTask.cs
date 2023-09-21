@@ -164,8 +164,9 @@ public class BaseItemAnalyzerTask
             }
 
             _logger.LogInformation(
-                "Analyzing {Count} files from {Name} season {Season}",
+                "Analyzing {Count} files for {Type} from {Name} season {Season}",
                 items.Count,
+                this._analysisMode,
                 first.SeriesName,
                 first.SeasonNumber);
         }
@@ -174,7 +175,7 @@ public class BaseItemAnalyzerTask
             // we ignore movies intro run
             if (this._analysisMode == AnalysisMode.Credits)
             {
-                _logger.LogInformation("Analyzing Movie {Name}", first.Name);
+                _logger.LogInformation("Analyzing Movie (Outro): {Name}", first.Name);
             }
         }
 

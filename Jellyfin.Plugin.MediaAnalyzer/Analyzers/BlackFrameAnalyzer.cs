@@ -61,12 +61,12 @@ public class BlackFrameAnalyzer : IMediaFileAnalyzer
 
         if (creditTimes.Count != 0)
         {
-            _logger.LogDebug("Save {Count} segment/s", creditTimes.Count);
+            _logger.LogInformation("Save {Count} segments", creditTimes.Count);
             Plugin.Instance!.UpdateTimestamps(creditTimes, mode);
         }
         else
         {
-            _logger.LogDebug("No segments to save");
+            _logger.LogDebug("No segments found");
         }
 
         return analysisQueue
