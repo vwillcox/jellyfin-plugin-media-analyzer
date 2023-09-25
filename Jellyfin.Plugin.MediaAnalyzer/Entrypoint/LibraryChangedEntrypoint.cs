@@ -143,7 +143,6 @@ public class LibraryChangedEntrypoint : IServerEntryPoint
     /// <param name="itemChangeEventArgs">The <see cref="ItemChangeEventArgs"/>.</param>
     private void LibraryManagerItemUpdated(object? sender, ItemChangeEventArgs itemChangeEventArgs)
     {
-
         if (!Plugin.Instance!.Configuration.RunAfterAddOrUpdateEvent)
         {
             return;

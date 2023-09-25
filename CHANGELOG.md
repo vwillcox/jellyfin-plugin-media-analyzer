@@ -4,6 +4,12 @@
 
 * None
 
+## v0.3.0.0 (2023-09-25)
+
+* Add options to control listener
+* Round to two decimal places
+* Improve log messages
+
 ## v0.2.0.0 (2023-05-28)
 
 * Blacklisting with db
